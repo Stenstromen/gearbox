@@ -18,6 +18,8 @@ Watch downloads, add torrents, and start or stop them from a native app — with
 
 ## Features
 
+![demo](./demo.webp)
+
 - **Remote Transmission** — talk to a Transmission 2.x–4.x daemon over its classic JSON-RPC (`http` or `https`)
 - **Torrent list** — name, size, progress, peers, and up/down rates, with session totals in the toolbar
 - **Filter & sort** — narrow by name or status (active, downloading, seeding, paused, finished, error); sort by name, size, progress, peers, speed, ratio, or status
