@@ -4,6 +4,9 @@ frontend/dist/*
 !frontend/dist/.gitkeep
 .env
 frontend/node_modules
+# A global gitignore excludes /build. These assets are source for this app.
+!/build/
+!/build/**
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # Mobile generated (per-machine; overlays hold absolute paths)
