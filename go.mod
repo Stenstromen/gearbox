@@ -3,12 +3,11 @@ module github.com/stenstromen/gearbox
 go 1.25.0
 
 require (
-	github.com/wailsapp/wails/v3 v3.0.0-beta.26
-	github.com/zalando/go-keyring v0.2.6
+	github.com/wailsapp/wails/v3 v3.0.0-beta.27
+	github.com/zalando/go-keyring v0.2.8
 )
 
 require (
-	al.essio.dev/pkg/shellescape v1.6.0 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
