@@ -1,12 +1,13 @@
 import {Events} from "@wailsio/runtime";
 import {TransmissionService, type Torrent, type TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatRate} from "../format";
-import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, statusFilters, type SortKey, type StatusFilter} from "../sort";
+import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, type SortKey, type StatusFilter} from "../sort";
 import {openAddDialog, openRemoveDialog} from "./add-dialog";
 import {openContextMenu} from "./context-menu";
 import {createPreferencesPanel} from "./preferences";
 import {fillTorrentInfo, renderInspector, type InspectorTab} from "./inspector";
 import {createSortField} from "./sort-menu";
+import {createStatusField} from "./status-menu";
 import {renderTorrentList} from "./torrent-list";
 
 let refreshMs = 5000;
@@ -21,7 +22,12 @@ export function mountApp(root: HTMLElement): void {
     nameInput.setAttribute("aria-label", "Filter by name");
     nameInput.autocomplete = "off";
     nameInput.spellcheck = false;
-    const statusSelect = selectField("Status", "Filter by status", statusFilters);
+    const statusField = createStatusField((next) => {
+        statusFilter = next;
+        if (loaded) {
+            paint();
+        }
+    });
     const sortField = createSortField((stored) => {
         const parsed = decodeSort(stored);
         if (!parsed) {
@@ -66,7 +72,7 @@ export function mountApp(root: HTMLElement): void {
     actions.append(openButton, deleteButton, divider, startButton, stopButton);
     const filters = document.createElement("div");
     filters.className = "toolbar-filters";
-    filters.append(nameInput, statusSelect.label, sortField.element);
+    filters.append(nameInput, statusField.element, sortField.element);
     toolbar.append(actions, filters, toolbarEnd);
 
     const notice = document.createElement("p");
@@ -391,13 +397,6 @@ export function mountApp(root: HTMLElement): void {
 
     nameInput.addEventListener("input", () => {
         nameQuery = nameInput.value;
-        if (loaded) {
-            paint();
-        }
-    });
-
-    statusSelect.control.addEventListener("change", () => {
-        statusFilter = isStatusFilter(statusSelect.control.value) ? statusSelect.control.value : "all";
         if (loaded) {
             paint();
         }
@@ -771,33 +770,12 @@ function pauseIcon(): SVGSVGElement {
     return actionIcon(["M8 5.2h3.1v13.6H8z", "M12.9 5.2H16v13.6h-3.1z"]);
 }
 
-function selectField<T extends string>(caption: string, ariaLabel: string, options: readonly {key: T; label: string}[]): {label: HTMLLabelElement; control: HTMLSelectElement} {
-    const label = document.createElement("label");
-    label.className = "field";
-    const text = document.createElement("span");
-    text.textContent = caption;
-    const control = document.createElement("select");
-    control.setAttribute("aria-label", ariaLabel);
-    for (const option of options) {
-        const item = document.createElement("option");
-        item.value = option.key;
-        item.textContent = option.label;
-        control.append(item);
-    }
-    label.append(text, control);
-    return {label, control};
-}
-
 function isTypingTarget(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, .sort-trigger, .sort-menu") !== null);
+    return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, .picker-trigger, .picker-menu") !== null);
 }
 
 function isResizeHandle(target: EventTarget | null): boolean {
     return target instanceof Element && target.closest(".inspector-resize") !== null;
-}
-
-function isStatusFilter(value: string): value is StatusFilter {
-    return statusFilters.some((option) => option.key === value);
 }
 
 function errorMessage(err: unknown): string {

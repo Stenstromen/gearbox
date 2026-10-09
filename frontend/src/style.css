@@ -133,7 +133,7 @@ html, body {
     font-size: 12px;
 }
 
-.filter, .field select, .sort-trigger {
+.filter, .field select, .picker-trigger {
     border: 1px solid var(--line);
     background: #121316;
     color: var(--text);
@@ -151,7 +151,7 @@ html, body {
 }
 
 .filter::placeholder { color: var(--muted); }
-.filter:focus, .field select:focus, .sort-trigger:focus, .sort-trigger.is-open { border-color: var(--accent); }
+.filter:focus, .field select:focus, .picker-trigger:focus, .picker-trigger.is-open { border-color: var(--accent); }
 
 .field select {
     padding-right: 28px;
@@ -159,7 +159,7 @@ html, body {
     background: #121316;
 }
 
-.sort-trigger {
+.picker-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
@@ -168,21 +168,23 @@ html, body {
     cursor: pointer;
 }
 
-.sort-trigger-icons {
+.picker-trigger-wide { min-width: 10rem; }
+
+.picker-trigger-icons {
     display: inline-flex;
     align-items: center;
     gap: 8px;
 }
 
-.sort-trigger-mark {
+.picker-trigger-mark {
     width: 12px;
     height: 12px;
     color: var(--accent);
 }
 
-.sort-trigger-mark[hidden] { display: none; }
+.picker-trigger-mark[hidden] { display: none; }
 
-.sort-trigger-chevron {
+.picker-trigger-chevron {
     width: 0;
     height: 0;
     border-right: 4px solid transparent;
@@ -190,7 +192,7 @@ html, body {
     border-top: 5px solid var(--muted);
 }
 
-.sort-menu {
+.picker-menu {
     position: fixed;
     z-index: 30;
     margin: 0;
@@ -202,9 +204,9 @@ html, body {
     user-select: none;
 }
 
-.sort-menu[hidden] { display: none; }
+.picker-menu[hidden] { display: none; }
 
-.sort-option {
+.picker-option {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -219,13 +221,13 @@ html, body {
     cursor: pointer;
 }
 
-.sort-option-mark {
+.picker-option-mark {
     flex: none;
     width: 12px;
     height: 12px;
 }
 
-.sort-option[aria-checked="true"] .sort-option-mark::after {
+.picker-option[aria-checked="true"] .picker-option-mark::after {
     content: "";
     display: block;
     width: 4px;
@@ -236,13 +238,13 @@ html, body {
     transform: rotate(45deg);
 }
 
-.sort-option:hover,
-.sort-option:focus-visible,
+.picker-option:hover,
+.picker-option:focus-visible,
 .sort-reverse:hover { background: #323844; }
 
-.sort-option:focus-visible { outline-offset: -2px; }
+.picker-option:focus-visible { outline-offset: -2px; }
 
-.sort-menu hr {
+.picker-menu hr {
     margin: 6px 0;
     border: 0;
     border-top: 1px solid #3c4452;
