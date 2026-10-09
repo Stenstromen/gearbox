@@ -73,6 +73,13 @@ export function SaveSettings(input: $models.SettingsInput): $CancellablePromise<
 }
 
 /**
+ * SetSort stores the torrent list sort so the next launch restores it.
+ */
+export function SetSort(sort: string): $CancellablePromise<void> {
+    return $Call.ByID(1836082323, sort);
+}
+
+/**
  * StartTorrent resumes one torrent.
  */
 export function StartTorrent(id: number): $CancellablePromise<void> {

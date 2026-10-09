@@ -165,6 +165,7 @@ export function mountApp(root: HTMLElement): void {
     let loaded = false;
     let timer = 0;
     let sortKey: SortKey = "name";
+    let sortTouched = false;
     let statusFilter: StatusFilter = "all";
     let nameQuery = "";
     let torrents: Torrent[] = [];
@@ -389,7 +390,12 @@ export function mountApp(root: HTMLElement): void {
     });
 
     sortSelect.control.addEventListener("change", () => {
+        sortTouched = true;
         sortKey = isSortKey(sortSelect.control.value) ? sortSelect.control.value : "name";
+        void TransmissionService.SetSort(sortKey).catch((err: unknown) => {
+            notice.hidden = false;
+            notice.textContent = errorMessage(err);
+        });
         if (loaded) {
             paint();
         }
@@ -694,6 +700,13 @@ export function mountApp(root: HTMLElement): void {
         if (settings && settings.refreshSeconds >= 1) {
             refreshMs = settings.refreshSeconds * 1000;
             armRefresh();
+        }
+        if (!sortTouched && settings && isSortKey(settings.sort)) {
+            sortKey = settings.sort;
+            sortSelect.control.value = sortKey;
+            if (loaded) {
+                paint();
+            }
         }
     }).catch(() => undefined);
 

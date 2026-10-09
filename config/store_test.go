@@ -26,17 +26,17 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prefs.RefreshSeconds != 5 || prefs.URL != "" {
+	if prefs.RefreshSeconds != 5 || prefs.URL != "" || prefs.Sort != "name" {
 		t.Fatalf("defaults = %+v", prefs)
 	}
-	if err := store.Save(Preferences{URL: " http://127.0.0.1:9091 ", Username: " transmission ", RefreshSeconds: 0}); err != nil {
+	if err := store.Save(Preferences{URL: " http://127.0.0.1:9091 ", Username: " transmission ", RefreshSeconds: 0, Sort: " ratio "}); err != nil {
 		t.Fatal(err)
 	}
 	prefs, err = store.Preferences()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prefs.URL != "http://127.0.0.1:9091" || prefs.Username != "transmission" || prefs.RefreshSeconds != 5 {
+	if prefs.URL != "http://127.0.0.1:9091" || prefs.Username != "transmission" || prefs.RefreshSeconds != 5 || prefs.Sort != "ratio" {
 		t.Fatalf("saved = %+v", prefs)
 	}
 	raw, err := os.ReadFile(path)
@@ -52,5 +52,12 @@ func TestNormalizeRefreshLimits(t *testing.T) {
 	slow := (Preferences{RefreshSeconds: 99999}).Normalize()
 	if slow.RefreshSeconds != 3600 {
 		t.Fatalf("refresh = %d", slow.RefreshSeconds)
+	}
+	if slow.Sort != "name" {
+		t.Fatalf("sort = %q", slow.Sort)
+	}
+	unknown := (Preferences{Sort: "nope"}).Normalize()
+	if unknown.Sort != "name" {
+		t.Fatalf("sort = %q", unknown.Sort)
 	}
 }

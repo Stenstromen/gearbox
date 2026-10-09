@@ -8,8 +8,11 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stenstromen/gearbox/config"
 )
 
 func TestNormalizeEndpoint(t *testing.T) {
@@ -217,6 +220,43 @@ func TestGetTorrent(t *testing.T) {
 	}
 	if info.Files[1].Have != 100 || info.Files[2].Name != "readme.txt" || info.Files[2].Have != 20 {
 		t.Fatalf("files = %+v", info.Files)
+	}
+}
+
+func TestSetSortPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	store, err := config.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(config.Preferences{
+		URL:            "http://127.0.0.1:9091/transmission/rpc",
+		Username:       "me",
+		RefreshSeconds: 9,
+		Sort:           "name",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := &TransmissionService{store: store}
+	if err := service.SetSort("ratio"); err != nil {
+		t.Fatal(err)
+	}
+	prefs, err := store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.Sort != "ratio" || prefs.URL != "http://127.0.0.1:9091/transmission/rpc" || prefs.Username != "me" || prefs.RefreshSeconds != 9 {
+		t.Fatalf("prefs = %+v", prefs)
+	}
+	if err := service.SetSort("nope"); err == nil {
+		t.Fatal("expected unknown sort to be rejected")
+	}
+	prefs, err = store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.Sort != "ratio" {
+		t.Fatalf("sort = %q", prefs.Sort)
 	}
 }
 

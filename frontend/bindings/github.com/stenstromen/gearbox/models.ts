@@ -35,12 +35,14 @@ export interface Peer {
 
 /**
  * Settings is the connection form. The password itself stays in the keychain.
+ * Sort is the torrent list order restored when the app opens.
  */
 export interface Settings {
     "url": string;
     "username": string;
     "hasPassword": boolean;
     "refreshSeconds": number;
+    "sort": string;
 }
 
 /**

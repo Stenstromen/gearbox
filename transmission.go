@@ -43,11 +43,13 @@ type Torrent struct {
 }
 
 // Settings is the connection form. The password itself stays in the keychain.
+// Sort is the torrent list order restored when the app opens.
 type Settings struct {
 	URL            string `json:"url"`
 	Username       string `json:"username"`
 	HasPassword    bool   `json:"hasPassword"`
 	RefreshSeconds int    `json:"refreshSeconds"`
+	Sort           string `json:"sort"`
 }
 
 // SettingsInput is a preferences save. An empty password keeps the saved one.
@@ -106,6 +108,7 @@ func (s *TransmissionService) GetSettings() (Settings, error) {
 		Username:       prefs.Username,
 		HasPassword:    secret != "",
 		RefreshSeconds: prefs.RefreshSeconds,
+		Sort:           prefs.Sort,
 	}
 	if settings.URL == "" {
 		settings.URL = strings.TrimSpace(os.Getenv(envURL))
@@ -123,10 +126,15 @@ func (s *TransmissionService) SaveSettings(input SettingsInput) error {
 	if s.err != nil {
 		return s.err
 	}
+	existing, err := s.store.Preferences()
+	if err != nil {
+		return err
+	}
 	prefs := config.Preferences{
 		URL:            input.URL,
 		Username:       input.Username,
 		RefreshSeconds: input.RefreshSeconds,
+		Sort:           existing.Sort,
 	}.Normalize()
 	if _, err := normalizeEndpoint(prefs.URL); err != nil {
 		return err
@@ -146,6 +154,23 @@ func (s *TransmissionService) SaveSettings(input SettingsInput) error {
 		return err
 	}
 	return s.reloadClient()
+}
+
+// SetSort stores the torrent list sort so the next launch restores it.
+func (s *TransmissionService) SetSort(sort string) error {
+	if s.err != nil {
+		return s.err
+	}
+	sort = strings.TrimSpace(sort)
+	if !config.ValidSort(sort) {
+		return fmt.Errorf("unknown sort %q", sort)
+	}
+	prefs, err := s.store.Preferences()
+	if err != nil {
+		return err
+	}
+	prefs.Sort = sort
+	return s.store.Save(prefs)
 }
 
 func keepEnvPassword() error {
