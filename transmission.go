@@ -557,7 +557,7 @@ type rpcPeer struct {
 }
 
 // GetTorrent requests the fields shown in the inspector.
-// Availability is the fraction of pieces held by at least one connected peer.
+// Availability is the fraction of pieces present in the swarm.
 // Transmission reports that per piece, so an empty array means it is unknown.
 func (c *Client) GetTorrent(ctx context.Context, id int) (TorrentInfo, error) {
 	var arguments struct {
@@ -701,13 +701,17 @@ func peerAddress(address string, port int) string {
 	return fmt.Sprintf("%s:%d", address, port)
 }
 
+// swarmAvailability is the fraction of pieces present in the swarm.
+// Transmission uses -1 for a piece this client already has, and otherwise
+// the number of connected peers that have it. A piece counts as available
+// when anyone in the swarm has it, so one peer with every piece yields 1.
 func swarmAvailability(pieces []float64) float64 {
 	if len(pieces) == 0 {
 		return -1
 	}
 	var present float64
 	for _, count := range pieces {
-		if count > 0 {
+		if count != 0 {
 			present++
 		}
 	}

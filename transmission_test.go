@@ -220,6 +220,30 @@ func TestGetTorrent(t *testing.T) {
 	}
 }
 
+func TestSwarmAvailability(t *testing.T) {
+	tests := []struct {
+		name   string
+		pieces []float64
+		want   float64
+	}{
+		{name: "unknown", pieces: nil, want: -1},
+		{name: "peer has every piece", pieces: []float64{1, 3, 1, 2}, want: 1},
+		{name: "we have every piece", pieces: []float64{-1, -1, -1, -1}, want: 1},
+		{name: "seed fills what we already have", pieces: []float64{-1, -1, -1, 1}, want: 1},
+		{name: "half the pieces", pieces: []float64{1, 0, 2, 0}, want: 0.5},
+		{name: "only our pieces", pieces: []float64{-1, -1, 0, 0}, want: 0.5},
+		{name: "nobody", pieces: []float64{0, 0, 0, 0}, want: 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := swarmAvailability(test.pieces)
+			if math.Abs(got-test.want) > 1e-9 {
+				t.Fatalf("availability = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestGetTorrentNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
