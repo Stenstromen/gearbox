@@ -1,11 +1,12 @@
 import {Events} from "@wailsio/runtime";
 import {TransmissionService, type Torrent, type TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatRate} from "../format";
-import {filterByName, filterByStatus, isStoppedStatus, sortOptions, sortTorrents, statusFilters, type SortKey, type StatusFilter} from "../sort";
+import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, statusFilters, type SortKey, type StatusFilter} from "../sort";
 import {openAddDialog, openRemoveDialog} from "./add-dialog";
 import {openContextMenu} from "./context-menu";
 import {createPreferencesPanel} from "./preferences";
 import {fillTorrentInfo, renderInspector, type InspectorTab} from "./inspector";
+import {createSortField} from "./sort-menu";
 import {renderTorrentList} from "./torrent-list";
 
 let refreshMs = 5000;
@@ -21,7 +22,22 @@ export function mountApp(root: HTMLElement): void {
     nameInput.autocomplete = "off";
     nameInput.spellcheck = false;
     const statusSelect = selectField("Status", "Filter by status", statusFilters);
-    const sortSelect = selectField("Sort", "Sort by", sortOptions);
+    const sortField = createSortField((stored) => {
+        const parsed = decodeSort(stored);
+        if (!parsed) {
+            return;
+        }
+        sortTouched = true;
+        sortKey = parsed.key;
+        sortReversed = parsed.reversed;
+        void TransmissionService.SetSort(stored).catch((err: unknown) => {
+            notice.hidden = false;
+            notice.textContent = errorMessage(err);
+        });
+        if (loaded) {
+            paint();
+        }
+    });
     const totals = document.createElement("div");
     totals.className = "totals";
     const downTotal = document.createElement("span");
@@ -50,7 +66,7 @@ export function mountApp(root: HTMLElement): void {
     actions.append(openButton, deleteButton, divider, startButton, stopButton);
     const filters = document.createElement("div");
     filters.className = "toolbar-filters";
-    filters.append(nameInput, statusSelect.label, sortSelect.label);
+    filters.append(nameInput, statusSelect.label, sortField.element);
     toolbar.append(actions, filters, toolbarEnd);
 
     const notice = document.createElement("p");
@@ -165,6 +181,7 @@ export function mountApp(root: HTMLElement): void {
     let loaded = false;
     let timer = 0;
     let sortKey: SortKey = "name";
+    let sortReversed = false;
     let sortTouched = false;
     let statusFilter: StatusFilter = "all";
     let nameQuery = "";
@@ -178,7 +195,7 @@ export function mountApp(root: HTMLElement): void {
     let inspectorLoading = false;
     let inspectorGeneration = 0;
 
-    const visibleTorrents = () => sortTorrents(filterByStatus(filterByName(torrents, nameQuery), statusFilter), sortKey);
+    const visibleTorrents = () => sortTorrents(filterByStatus(filterByName(torrents, nameQuery), statusFilter), sortKey, sortReversed);
 
     const selectedTorrents = () => torrents.filter((torrent) => selectedIds.has(torrent.id));
 
@@ -381,18 +398,6 @@ export function mountApp(root: HTMLElement): void {
 
     statusSelect.control.addEventListener("change", () => {
         statusFilter = isStatusFilter(statusSelect.control.value) ? statusSelect.control.value : "all";
-        if (loaded) {
-            paint();
-        }
-    });
-
-    sortSelect.control.addEventListener("change", () => {
-        sortTouched = true;
-        sortKey = isSortKey(sortSelect.control.value) ? sortSelect.control.value : "name";
-        void TransmissionService.SetSort(sortKey).catch((err: unknown) => {
-            notice.hidden = false;
-            notice.textContent = errorMessage(err);
-        });
         if (loaded) {
             paint();
         }
@@ -698,11 +703,15 @@ export function mountApp(root: HTMLElement): void {
             refreshMs = settings.refreshSeconds * 1000;
             armRefresh();
         }
-        if (!sortTouched && settings && isSortKey(settings.sort)) {
-            sortKey = settings.sort;
-            sortSelect.control.value = sortKey;
-            if (loaded) {
-                paint();
+        if (!sortTouched && settings) {
+            const parsed = decodeSort(settings.sort);
+            if (parsed) {
+                sortKey = parsed.key;
+                sortReversed = parsed.reversed;
+                sortField.setStored(settings.sort);
+                if (loaded) {
+                    paint();
+                }
             }
         }
     }).catch(() => undefined);
@@ -780,7 +789,7 @@ function selectField<T extends string>(caption: string, ariaLabel: string, optio
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
+    return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, .sort-trigger, .sort-menu") !== null);
 }
 
 function isResizeHandle(target: EventTarget | null): boolean {
@@ -789,10 +798,6 @@ function isResizeHandle(target: EventTarget | null): boolean {
 
 function isStatusFilter(value: string): value is StatusFilter {
     return statusFilters.some((option) => option.key === value);
-}
-
-function isSortKey(value: string): value is SortKey {
-    return sortOptions.some((option) => option.key === value);
 }
 
 function errorMessage(err: unknown): string {

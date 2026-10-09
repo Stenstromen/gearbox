@@ -13,6 +13,25 @@ export const sortOptions = [
 
 export type SortKey = (typeof sortOptions)[number]["key"];
 
+const reversePrefix = "-";
+
+export function encodeSort(key: SortKey, reversed: boolean): string {
+    return reversed ? `${reversePrefix}${key}` : key;
+}
+
+export function decodeSort(value: string): {key: SortKey; reversed: boolean} | null {
+    const reversed = value.startsWith(reversePrefix);
+    const key = reversed ? value.slice(reversePrefix.length) : value;
+    if (!isSortKey(key)) {
+        return null;
+    }
+    return {key, reversed};
+}
+
+export function isSortKey(value: string): value is SortKey {
+    return sortOptions.some((option) => option.key === value);
+}
+
 const numericDirection: Record<SortKey, "asc" | "desc"> = {
     name: "asc",
     size: "desc",
@@ -74,8 +93,11 @@ function matchesStatus(torrent: Torrent, status: StatusFilter): boolean {
     }
 }
 
-export function sortTorrents(torrents: readonly Torrent[], key: SortKey): Torrent[] {
-    return [...torrents].sort((a, b) => compareTorrents(a, b, key));
+export function sortTorrents(torrents: readonly Torrent[], key: SortKey, reversed = false): Torrent[] {
+    return [...torrents].sort((a, b) => {
+        const order = compareTorrents(a, b, key);
+        return reversed ? -order : order;
+    });
 }
 
 function compareTorrents(a: Torrent, b: Torrent, key: SortKey): number {

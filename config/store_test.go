@@ -60,4 +60,11 @@ func TestNormalizeRefreshLimits(t *testing.T) {
 	if unknown.Sort != "name" {
 		t.Fatalf("sort = %q", unknown.Sort)
 	}
+	reversed := (Preferences{Sort: "-ratio"}).Normalize()
+	if reversed.Sort != "-ratio" {
+		t.Fatalf("sort = %q", reversed.Sort)
+	}
+	if (Preferences{Sort: "-"}).Normalize().Sort != "name" {
+		t.Fatal("expected a bare reverse mark to be rejected")
+	}
 }

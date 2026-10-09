@@ -42,8 +42,9 @@ func (p Preferences) Normalize() Preferences {
 }
 
 // ValidSort reports whether sort is one of the torrent list orders.
-// The keys match frontend/src/sort.ts.
+// A leading "-" reverses that order. The keys match frontend/src/sort.ts.
 func ValidSort(sort string) bool {
+	sort = strings.TrimPrefix(sort, "-")
 	switch sort {
 	case "name", "size", "progress", "peers", "download", "upload", "ratio", "status":
 		return true

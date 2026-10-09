@@ -258,6 +258,19 @@ func TestSetSortPersists(t *testing.T) {
 	if prefs.Sort != "ratio" {
 		t.Fatalf("sort = %q", prefs.Sort)
 	}
+	if err := service.SetSort("-size"); err != nil {
+		t.Fatal(err)
+	}
+	prefs, err = store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.Sort != "-size" {
+		t.Fatalf("sort = %q", prefs.Sort)
+	}
+	if err := service.SetSort("-nope"); err == nil {
+		t.Fatal("expected unknown reversed sort to be rejected")
+	}
 }
 
 func TestSwarmAvailability(t *testing.T) {
