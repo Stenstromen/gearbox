@@ -254,11 +254,8 @@ export function mountApp(root: HTMLElement): void {
         paint();
     };
 
-    const showInspector = (id: number, resetTab: boolean) => {
+    const showInspector = (id: number) => {
         inspectorOpen = true;
-        if (resetTab) {
-            inspectorTab = "info";
-        }
         if (torrentInfo?.id === id) {
             paint();
             return;
@@ -281,7 +278,7 @@ export function mountApp(root: HTMLElement): void {
         }
         selectedIds = new Set([id]);
         cursorId = id;
-        showInspector(id, true);
+        showInspector(id);
     };
 
     const moveCursor = (delta: number) => {
@@ -300,7 +297,7 @@ export function mountApp(root: HTMLElement): void {
         const changed = cursorId !== next.id;
         cursorId = next.id;
         if (inspectorOpen && changed) {
-            showInspector(next.id, false);
+            showInspector(next.id);
         } else {
             paint();
         }
@@ -328,7 +325,7 @@ export function mountApp(root: HTMLElement): void {
         if (cursorId === null) {
             return;
         }
-        showInspector(cursorId, false);
+        showInspector(cursorId);
     };
 
     const loadInspector = async (id: number) => {
@@ -535,7 +532,7 @@ export function mountApp(root: HTMLElement): void {
             const changed = cursorId !== id;
             cursorId = id;
             if (inspectorOpen && changed) {
-                showInspector(id, false);
+                showInspector(id);
             } else {
                 paint();
             }
