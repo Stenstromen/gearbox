@@ -1,4 +1,5 @@
 import type {Peer, TorrentFile, Tracker, TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
+import {mountColumnResize, pxFromRem, unmountColumnResize, type ColumnSpec} from "../column-resize";
 import {formatAvailability, formatBytes, formatDuration, formatLastActivity, formatPercent, formatRate, formatRatio, formatTimestamp} from "../format";
 
 export const inspectorTabs = [
@@ -18,8 +19,20 @@ export type InspectorState = {
 };
 
 export function renderInspector(host: HTMLElement, state: InspectorState, onTab: (tab: InspectorTab) => void, onClose: () => void): void {
+    unmountColumnResize("peers");
+    unmountColumnResize("files");
     host.replaceChildren();
-    host.append(tabBar(state.tab, onTab, onClose), panelBody(state));
+    const body = panelBody(state);
+    host.append(tabBar(state.tab, onTab, onClose), body);
+    const table = body.querySelector("table");
+    if (!(table instanceof HTMLTableElement) || !host.isConnected) {
+        return;
+    }
+    if (table.classList.contains("peer-table")) {
+        mountColumnResize(table, "peers", peerColumnSpecs());
+    } else if (table.classList.contains("file-table")) {
+        mountColumnResize(table, "files", fileColumnSpecs());
+    }
 }
 
 export function fillTorrentInfo(host: HTMLElement, info: TorrentInfo): void {
@@ -169,13 +182,13 @@ function infoFields(info: TorrentInfo): Record<string, string> {
 }
 
 const peerColumns = [
-    {key: "encrypted", label: "Encrypted", className: "peer-encrypted", direction: "desc"},
-    {key: "up", label: "Up", className: "num", direction: "desc"},
-    {key: "down", label: "Down", className: "num", direction: "desc"},
-    {key: "done", label: "Done", className: "num", direction: "desc"},
-    {key: "status", label: "Status", className: "", direction: "asc"},
-    {key: "address", label: "Address", className: "", direction: "asc"},
-    {key: "client", label: "Client", className: "", direction: "asc"},
+    {key: "encrypted", label: "Encrypted", className: "peer-encrypted", direction: "desc", minRem: 2.75, defaultRem: 9.25},
+    {key: "up", label: "Up", className: "num", direction: "desc", minRem: 6, defaultRem: 7},
+    {key: "down", label: "Down", className: "num", direction: "desc", minRem: 6, defaultRem: 7},
+    {key: "done", label: "Done", className: "num", direction: "desc", minRem: 5, defaultRem: 6.5},
+    {key: "status", label: "Status", className: "", direction: "asc", minRem: 5.75, defaultRem: 6.5},
+    {key: "address", label: "Address", className: "", direction: "asc", minRem: 8, defaultRem: 14},
+    {key: "client", label: "Client", className: "", direction: "asc", minRem: 8, defaultRem: 12, flex: true},
 ] as const;
 
 type PeerSortKey = (typeof peerColumns)[number]["key"];
@@ -210,16 +223,7 @@ function peerTable(peers: readonly Peer[], torrentId: number): HTMLElement {
         if (column.key === "status") {
             cell.title = peerStatusLegend;
         }
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "peer-sort";
-        const label = document.createElement("span");
-        label.textContent = column.label;
-        const mark = document.createElement("span");
-        mark.className = "peer-sort-mark";
-        mark.setAttribute("aria-hidden", "true");
-        button.append(label, mark);
-        button.addEventListener("click", () => {
+        cell.append(sortButton(column.label, () => {
             if (peerSortKey === column.key) {
                 peerSortDirection = peerSortDirection === "asc" ? "desc" : "asc";
             } else {
@@ -227,8 +231,7 @@ function peerTable(peers: readonly Peer[], torrentId: number): HTMLElement {
                 peerSortDirection = column.direction;
             }
             paint();
-        });
-        cell.append(button);
+        }));
         headers.set(column.key, cell);
         headRow.append(cell);
     }
@@ -257,6 +260,16 @@ function peerTable(peers: readonly Peer[], torrentId: number): HTMLElement {
     paint();
     table.append(head, body);
     return table;
+}
+
+function peerColumnSpecs(): ColumnSpec[] {
+    return peerColumns.map((column) => ({
+        id: column.key,
+        label: column.label,
+        min: pxFromRem(column.minRem),
+        defaultWidth: pxFromRem(column.defaultRem),
+        flex: "flex" in column && column.flex,
+    }));
 }
 
 function sortPeers(peers: readonly Peer[]): Peer[] {
@@ -488,6 +501,19 @@ function collapsedFor(torrentId: number): Set<string> {
     return collapsedPaths;
 }
 
+const fileColumns = [
+    {id: "name", label: "Name", minRem: 8, defaultRem: 16, flex: true, direction: "asc"},
+    {id: "size", label: "Size", minRem: 4.5, defaultRem: 6.5, direction: "desc"},
+    {id: "downloaded", label: "Downloaded", minRem: 6, defaultRem: 9.5, direction: "desc"},
+    {id: "percent", label: "%", minRem: 5.75, defaultRem: 6.25, direction: "desc"},
+] as const;
+
+type FileSortKey = (typeof fileColumns)[number]["id"];
+
+let fileSortTorrent = 0;
+let fileSortKey: FileSortKey | null = null;
+let fileSortDirection: "asc" | "desc" = "asc";
+
 function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElement {
     if (files.length === 0) {
         const empty = document.createElement("p");
@@ -495,17 +521,32 @@ function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElemen
         empty.textContent = "No files";
         return empty;
     }
+    if (fileSortTorrent !== torrentId) {
+        fileSortTorrent = torrentId;
+        fileSortKey = null;
+        fileSortDirection = "asc";
+    }
     const table = document.createElement("table");
     table.className = "file-table";
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
-    for (const label of ["Name", "Size", "Downloaded", "%"]) {
+    const headers = new Map<FileSortKey, HTMLTableCellElement>();
+    for (const column of fileColumns) {
         const cell = document.createElement("th");
         cell.scope = "col";
-        cell.textContent = label;
-        if (label !== "Name") {
+        if (!("flex" in column)) {
             cell.className = "num";
         }
+        cell.append(sortButton(column.label, () => {
+            if (fileSortKey === column.id) {
+                fileSortDirection = fileSortDirection === "asc" ? "desc" : "asc";
+            } else {
+                fileSortKey = column.id;
+                fileSortDirection = column.direction;
+            }
+            paint();
+        }));
+        headers.set(column.id, cell);
         headRow.append(cell);
     }
     head.append(headRow);
@@ -513,12 +554,52 @@ function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElemen
     const nodes = fileTree(files);
     const collapsed = collapsedFor(torrentId);
     const paint = () => {
+        for (const column of fileColumns) {
+            const cell = headers.get(column.id);
+            if (!cell) {
+                continue;
+            }
+            const active = fileSortKey === column.id;
+            cell.setAttribute("aria-sort", active ? (fileSortDirection === "asc" ? "ascending" : "descending") : "none");
+            const button = cell.querySelector("button");
+            if (button) {
+                button.setAttribute("aria-label", active
+                    ? `Sort by ${column.label}, ${fileSortDirection === "asc" ? "ascending" : "descending"}`
+                    : `Sort by ${column.label}`);
+            }
+        }
+        sortFileNodes(nodes);
         body.replaceChildren();
         appendFileNodes(body, nodes, 0, "", collapsed, paint);
     };
     paint();
     table.append(head, body);
     return table;
+}
+
+function fileColumnSpecs(): ColumnSpec[] {
+    return fileColumns.map((column) => ({
+        id: column.id,
+        label: column.label,
+        min: pxFromRem(column.minRem),
+        defaultWidth: pxFromRem(column.defaultRem),
+        flex: "flex" in column && column.flex,
+    }));
+}
+
+function sortButton(label: string, onClick: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "col-sort";
+    const text = document.createElement("span");
+    text.className = "col-label";
+    text.textContent = label;
+    const mark = document.createElement("span");
+    mark.className = "col-sort-mark";
+    mark.setAttribute("aria-hidden", "true");
+    button.append(text, mark);
+    button.addEventListener("click", onClick);
+    return button;
 }
 
 function appendFileNodes(body: HTMLElement, nodes: readonly FileNode[], depth: number, parentPath: string, collapsed: Set<string>, paint: () => void): void {
@@ -626,7 +707,6 @@ function fileTree(files: readonly TorrentFile[]): FileNode[] {
         parent.push(leaf);
     }
     rollupFiles(roots);
-    sortFileNodes(roots);
     return roots;
 }
 
@@ -646,16 +726,36 @@ function rollupFiles(nodes: FileNode[]): {size: number; have: number} {
 }
 
 function sortFileNodes(nodes: FileNode[]): void {
-    nodes.sort((a, b) => {
-        const folderDelta = Number(b.children.length > 0) - Number(a.children.length > 0);
-        if (folderDelta !== 0) {
-            return folderDelta;
-        }
-        return a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: "base"});
-    });
+    nodes.sort((a, b) => compareFileNodes(a, b, fileSortKey, fileSortDirection));
     for (const node of nodes) {
         sortFileNodes(node.children);
     }
+}
+
+function compareFileNodes(a: FileNode, b: FileNode, key: FileSortKey | null, direction: "asc" | "desc"): number {
+    const folderDelta = Number(b.children.length > 0) - Number(a.children.length > 0);
+    if (key === null || key === "name") {
+        if (folderDelta !== 0) {
+            return folderDelta;
+        }
+        return comparePeerText(a.name, b.name, key === null ? "asc" : direction);
+    }
+    const primary = key === "size"
+        ? comparePeerNumber(a.size, b.size, direction)
+        : key === "downloaded"
+            ? comparePeerNumber(a.have, b.have, direction)
+            : comparePeerNumber(fileFraction(a), fileFraction(b), direction);
+    if (primary !== 0) {
+        return primary;
+    }
+    if (folderDelta !== 0) {
+        return folderDelta;
+    }
+    return comparePeerText(a.name, b.name);
+}
+
+function fileFraction(node: FileNode): number {
+    return node.size > 0 ? node.have / node.size : 0;
 }
 
 function svgPath(d: string): SVGPathElement {

@@ -369,19 +369,57 @@ tr:last-child td { border-bottom: 0; }
 
 .torrents th, .torrents td { padding: 5px 10px; }
 
-.torrents th:nth-child(2),
-.torrents td:nth-child(2) { width: 6.25rem; }
+.col-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
-.torrents th:nth-child(3),
-.torrents td:nth-child(3) { width: 19rem; }
+.resizable { table-layout: fixed; }
 
-.torrents th:nth-child(4),
-.torrents td:nth-child(4) { width: 4.5rem; }
+.resizable td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-.torrents th:nth-child(5),
-.torrents th:nth-child(6),
-.torrents td:nth-child(5),
-.torrents td:nth-child(6) { width: 6.5rem; }
+.resizable th:hover { z-index: 4; }
+
+.col-resize {
+    position: absolute;
+    top: 0;
+    right: -6px;
+    z-index: 3;
+    width: 12px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.col-resize::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    width: 2px;
+    background: transparent;
+}
+
+.resizable th:hover .col-resize::after { background: #8b93a0; }
+
+.col-resize:hover::after,
+.col-resize.is-dragging::after,
+.col-resize:focus-visible::after { background: var(--accent); }
+
+.col-resize:focus-visible { outline: none; }
+
+body.is-col-resizing,
+body.is-col-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
 
 .name {
     overflow: hidden;
@@ -561,15 +599,15 @@ body.is-resizing {
 
 .inspector-body-flush .inspector-message { padding: 12px 16px; }
 
-.peer-table th {
-    padding: 0;
-}
+.peer-table th,
+.file-table th { padding: 0; }
 
-.peer-sort {
+.col-sort {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     width: 100%;
+    min-width: 0;
     padding: 10px 16px;
     border: 0;
     background: transparent;
@@ -581,11 +619,13 @@ body.is-resizing {
     cursor: pointer;
 }
 
-.peer-table th.num .peer-sort { justify-content: flex-end; }
+.peer-table th.num .col-sort,
+.file-table th.num .col-sort { justify-content: flex-end; }
 
-.peer-table th:hover { color: var(--text); }
+.peer-table th:hover,
+.file-table th:hover { color: var(--text); }
 
-.peer-sort-mark {
+.col-sort-mark {
     flex: none;
     width: 0;
     height: 0;
@@ -594,23 +634,22 @@ body.is-resizing {
     visibility: hidden;
 }
 
-.peer-table th[aria-sort="ascending"] .peer-sort-mark {
+.peer-table th[aria-sort="ascending"] .col-sort-mark,
+.file-table th[aria-sort="ascending"] .col-sort-mark {
     visibility: visible;
     border-bottom: 4px solid currentColor;
 }
 
-.peer-table th[aria-sort="descending"] .peer-sort-mark {
+.peer-table th[aria-sort="descending"] .col-sort-mark,
+.file-table th[aria-sort="descending"] .col-sort-mark {
     visibility: visible;
     border-top: 4px solid currentColor;
 }
 
 .peer-table th.peer-encrypted,
-.peer-table td.peer-encrypted {
-    width: 1%;
-    text-align: center;
-}
+.peer-table td.peer-encrypted { text-align: center; }
 
-.peer-table th.peer-encrypted .peer-sort { justify-content: center; }
+.peer-table th.peer-encrypted .col-sort { justify-content: center; }
 
 .peer-lock-wrap {
     display: inline-flex;
@@ -636,9 +675,9 @@ body.is-resizing {
 }
 
 .peer-address, .peer-client {
-    max-width: 16rem;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tracker { padding: 12px 16px; }
@@ -681,15 +720,6 @@ body.is-resizing {
 
 .file-table th.num,
 .file-table td.num { text-align: right; }
-
-.file-table th:nth-child(2),
-.file-table td:nth-child(2) { width: 6.5rem; }
-
-.file-table th:nth-child(3),
-.file-table td:nth-child(3) { width: 9.5rem; }
-
-.file-table th:last-child,
-.file-table td:last-child { width: 5.2rem; }
 
 .file-name { overflow: hidden; }
 

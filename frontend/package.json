@@ -8,7 +8,7 @@
     "build:dev": "vite build --minify false --mode development",
     "build": "vite build --mode production",
     "preview": "vite preview",
-    "test": "tsc --noEmit && node --experimental-strip-types src/selection.test.ts"
+    "test": "tsc --noEmit && node --experimental-strip-types src/selection.test.ts && node --experimental-strip-types src/column-resize.test.ts"
   },
   "dependencies": {
     "@wailsio/runtime": "latest"

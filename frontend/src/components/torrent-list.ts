@@ -1,4 +1,5 @@
 import type {Torrent} from "../../bindings/github.com/stenstromen/gearbox";
+import {mountColumnResize, pxFromRem, unmountColumnResize, type ColumnSpec} from "../column-resize";
 import {formatBytes, formatPercent, formatRate} from "../format";
 import type {SelectionModifiers} from "../selection";
 
@@ -24,6 +25,7 @@ export function renderTorrentList(host: HTMLElement, torrents: Torrent[], emptyL
     host.replaceChildren();
 
     if (torrents.length === 0) {
+        unmountColumnResize("torrents");
         const empty = document.createElement("p");
         empty.className = "empty";
         empty.textContent = emptyLabel;
@@ -34,20 +36,14 @@ export function renderTorrentList(host: HTMLElement, torrents: Torrent[], emptyL
     const table = document.createElement("table");
     table.className = "torrents";
     table.setAttribute("aria-multiselectable", "true");
+    const columns = torrentColumns();
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
-    for (const column of [
-        {label: "Name", className: ""},
-        {label: "Size", className: "num"},
-        {label: "Progress", className: "col-end"},
-        {label: "Peers", className: "num"},
-        {label: "Down", className: "num"},
-        {label: "Up", className: "num"},
-    ]) {
+    for (const column of columns) {
         const cell = document.createElement("th");
         cell.scope = "col";
         cell.className = column.className;
-        cell.textContent = column.label;
+        cell.append(columnLabel(column.label));
         headRow.append(cell);
     }
     thead.append(headRow);
@@ -58,6 +54,25 @@ export function renderTorrentList(host: HTMLElement, torrents: Torrent[], emptyL
     }
     table.append(thead, tbody);
     host.append(table);
+    mountColumnResize(table, "torrents", columns);
+}
+
+function torrentColumns(): (ColumnSpec & {className: string})[] {
+    return [
+        {id: "name", label: "Name", className: "", min: pxFromRem(8), defaultWidth: pxFromRem(16), flex: true},
+        {id: "size", label: "Size", className: "num", min: pxFromRem(4.5), defaultWidth: pxFromRem(6.25)},
+        {id: "progress", label: "Progress", className: "col-end", min: pxFromRem(9), defaultWidth: pxFromRem(19)},
+        {id: "peers", label: "Peers", className: "num", min: pxFromRem(3.25), defaultWidth: pxFromRem(4.5)},
+        {id: "down", label: "Down", className: "num", min: pxFromRem(4.5), defaultWidth: pxFromRem(6.5)},
+        {id: "up", label: "Up", className: "num", min: pxFromRem(4.5), defaultWidth: pxFromRem(6.5)},
+    ];
+}
+
+function columnLabel(text: string): HTMLSpanElement {
+    const label = document.createElement("span");
+    label.className = "col-label";
+    label.textContent = text;
+    return label;
 }
 
 function renderRow(torrent: Torrent, selection?: ListSelection): HTMLTableRowElement {

@@ -924,7 +924,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function isResizeHandle(target: EventTarget | null): boolean {
-    return target instanceof Element && target.closest(".inspector-resize") !== null;
+    return target instanceof Element && target.closest(".inspector-resize, .col-resize") !== null;
 }
 
 function isUnavailable(err: unknown): boolean {
