@@ -17,11 +17,12 @@ type Preferences struct {
 	Username       string `json:"username"`
 	RefreshSeconds int    `json:"refreshSeconds"`
 	Sort           string `json:"sort"`
+	CheckUpdates   bool   `json:"checkUpdates"`
 }
 
 // DefaultPreferences is used for a new install and for missing fields.
 func DefaultPreferences() Preferences {
-	return Preferences{RefreshSeconds: defaultRefreshSeconds, Sort: defaultSort}
+	return Preferences{RefreshSeconds: defaultRefreshSeconds, Sort: defaultSort, CheckUpdates: true}
 }
 
 // Normalize trims text fields and keeps the refresh interval and sort in range.

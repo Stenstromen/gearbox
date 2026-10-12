@@ -288,6 +288,49 @@ func TestSetSortPersists(t *testing.T) {
 	}
 }
 
+func TestSaveSettingsVersionCheck(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	store, err := config.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &TransmissionService{store: store}
+	input := SettingsInput{
+		URL:            "http://127.0.0.1:9091/transmission/rpc",
+		Username:       "me",
+		RefreshSeconds: 9,
+		CheckUpdates:   false,
+	}
+	if err := service.SaveSettings(input); err != nil {
+		t.Fatal(err)
+	}
+	prefs, err := store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.CheckUpdates || prefs.URL != input.URL || prefs.Username != "me" || prefs.RefreshSeconds != 9 || prefs.Sort != "name" {
+		t.Fatalf("disabled = %+v", prefs)
+	}
+	settings, err := service.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.CheckUpdates {
+		t.Fatal("settings still check for versions")
+	}
+	input.CheckUpdates = true
+	if err := service.SaveSettings(input); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = service.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.CheckUpdates {
+		t.Fatal("settings did not re-enable the version check")
+	}
+}
+
 func TestSwarmAvailability(t *testing.T) {
 	tests := []struct {
 		name   string

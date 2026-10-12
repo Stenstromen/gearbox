@@ -1123,6 +1123,32 @@ body.is-resizing {
     line-height: 1.3;
 }
 
+.toast.is-link {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.toast.is-link:hover { border-color: var(--accent); }
+
+.toast-link {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 650;
+    line-height: 1.3;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.toast-link[hidden] { display: none; }
+
 .toast-detail {
     margin-top: 2px;
     color: var(--muted);

@@ -15,5 +15,6 @@ export type {
     Torrent,
     TorrentFile,
     TorrentInfo,
-    Tracker
+    Tracker,
+    UpdateNotice
 } from "./models.js";

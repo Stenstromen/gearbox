@@ -50,6 +50,7 @@ type Settings struct {
 	HasPassword    bool   `json:"hasPassword"`
 	RefreshSeconds int    `json:"refreshSeconds"`
 	Sort           string `json:"sort"`
+	CheckUpdates   bool   `json:"checkUpdates"`
 }
 
 // SettingsInput is a preferences save. An empty password keeps the saved one.
@@ -59,6 +60,7 @@ type SettingsInput struct {
 	Password       string `json:"password"`
 	ClearPassword  bool   `json:"clearPassword"`
 	RefreshSeconds int    `json:"refreshSeconds"`
+	CheckUpdates   bool   `json:"checkUpdates"`
 }
 
 // TransmissionService lists torrents on a remote Transmission daemon.
@@ -109,6 +111,7 @@ func (s *TransmissionService) GetSettings() (Settings, error) {
 		HasPassword:    secret != "",
 		RefreshSeconds: prefs.RefreshSeconds,
 		Sort:           prefs.Sort,
+		CheckUpdates:   prefs.CheckUpdates,
 	}
 	if settings.URL == "" {
 		settings.URL = strings.TrimSpace(os.Getenv(envURL))
@@ -135,6 +138,7 @@ func (s *TransmissionService) SaveSettings(input SettingsInput) error {
 		Username:       input.Username,
 		RefreshSeconds: input.RefreshSeconds,
 		Sort:           existing.Sort,
+		CheckUpdates:   input.CheckUpdates,
 	}.Normalize()
 	if _, err := normalizeEndpoint(prefs.URL); err != nil {
 		return err

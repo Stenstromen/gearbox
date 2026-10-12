@@ -20,8 +20,18 @@ type Store struct {
 }
 
 type document struct {
-	Version     int          `json:"version"`
-	Preferences *Preferences `json:"preferences"`
+	Version     int                `json:"version"`
+	Preferences *storedPreferences `json:"preferences"`
+}
+
+// storedPreferences keeps CheckUpdates optional so a file written before the
+// setting existed still checks for updates.
+type storedPreferences struct {
+	URL            string `json:"url"`
+	Username       string `json:"username"`
+	RefreshSeconds int    `json:"refreshSeconds"`
+	Sort           string `json:"sort"`
+	CheckUpdates   *bool  `json:"checkUpdates"`
 }
 
 // DefaultPath is ~/Library/Application Support/Gearbox/preferences.json.
@@ -78,7 +88,21 @@ func (s *Store) loadLocked() (Preferences, error) {
 	if doc.Preferences == nil {
 		return DefaultPreferences(), nil
 	}
-	return doc.Preferences.Normalize(), nil
+	return doc.Preferences.preferences(), nil
+}
+
+func (stored storedPreferences) preferences() Preferences {
+	checkUpdates := true
+	if stored.CheckUpdates != nil {
+		checkUpdates = *stored.CheckUpdates
+	}
+	return Preferences{
+		URL:            stored.URL,
+		Username:       stored.Username,
+		RefreshSeconds: stored.RefreshSeconds,
+		Sort:           stored.Sort,
+		CheckUpdates:   checkUpdates,
+	}.Normalize()
 }
 
 // Save writes preferences atomically. The password is never included.
@@ -89,7 +113,10 @@ func (s *Store) Save(prefs Preferences) error {
 }
 
 func (s *Store) saveLocked(prefs Preferences) error {
-	raw, err := json.MarshalIndent(document{Version: fileVersion, Preferences: &prefs}, "", "  ")
+	raw, err := json.MarshalIndent(struct {
+		Version     int          `json:"version"`
+		Preferences *Preferences `json:"preferences"`
+	}{Version: fileVersion, Preferences: &prefs}, "", "  ")
 	if err != nil {
 		return err
 	}

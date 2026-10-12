@@ -1,4 +1,4 @@
-import {Events} from "@wailsio/runtime";
+import {Browser, Events} from "@wailsio/runtime";
 import {TransmissionService, type Torrent, type TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatRate} from "../format";
 import {emptySelection, sameIds, selectionFromArrow, selectionFromClick, selectionFromContext, selectionFromSelectAll, type RowSelection} from "../selection";
@@ -193,7 +193,7 @@ export function mountApp(root: HTMLElement): void {
     let reconnectAttempt = 0;
     let reconnectTimer = 0;
     let reconnectWaiting = false;
-    const toast = mountToast();
+    const toast = mountToast((href) => Browser.OpenURL(href));
     let sortKey: SortKey = "name";
     let sortReversed = false;
     let sortTouched = false;
@@ -862,6 +862,13 @@ export function mountApp(root: HTMLElement): void {
                 }
             }
         }
+    }).catch(() => undefined);
+
+    void TransmissionService.CheckUpdate().then((notice) => {
+        if (!notice?.available || notice.url === "" || reconnecting) {
+            return;
+        }
+        toast.show("New version available!", "", "success", notice.url);
     }).catch(() => undefined);
 
     void load();

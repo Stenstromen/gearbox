@@ -22,6 +22,14 @@ export function AddTorrent(request: $models.AddTorrentRequest): $CancellableProm
 }
 
 /**
+ * CheckUpdate compares the running app version with the latest GitHub release.
+ * When a newer release exists, URL points at the releases page.
+ */
+export function CheckUpdate(): $CancellablePromise<$models.UpdateNotice> {
+    return $Call.ByID(2408905790);
+}
+
+/**
  * DownloadLocation returns the default download directory when path is empty.
  */
 export function DownloadLocation(path: string): $CancellablePromise<$models.DownloadLocation> {

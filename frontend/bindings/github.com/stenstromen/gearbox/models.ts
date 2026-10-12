@@ -43,6 +43,7 @@ export interface Settings {
     "hasPassword": boolean;
     "refreshSeconds": number;
     "sort": string;
+    "checkUpdates": boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ export interface SettingsInput {
     "password": string;
     "clearPassword": boolean;
     "refreshSeconds": number;
+    "checkUpdates": boolean;
 }
 
 /**
@@ -131,4 +133,13 @@ export interface Tracker {
     "seederCount": number;
     "leecherCount": number;
     "downloadCount": number;
+}
+
+/**
+ * UpdateNotice is a startup version check. Available is false when this
+ * build is current, or when the check could not be completed.
+ */
+export interface UpdateNotice {
+    "available": boolean;
+    "url": string;
 }

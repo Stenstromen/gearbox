@@ -43,6 +43,15 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
     refreshInput.input.max = "3600";
     refreshInput.input.step = "1";
 
+    const updateLabel = document.createElement("label");
+    updateLabel.className = "preferences-check";
+    const updateInput = document.createElement("input");
+    updateInput.type = "checkbox";
+    updateInput.checked = true;
+    const updateText = document.createElement("span");
+    updateText.textContent = "Check for new versions";
+    updateLabel.append(updateInput, updateText);
+
     const error = document.createElement("p");
     error.className = "modal-error";
     error.hidden = true;
@@ -66,6 +75,7 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
         passwordHint,
         clearLabel,
         refreshInput.label,
+        updateLabel,
         error,
         actions,
     );
@@ -98,6 +108,7 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
             urlInput.input.value = settings?.url ?? "";
             usernameInput.input.value = settings?.username ?? "";
             refreshInput.input.value = String(settings?.refreshSeconds || 5);
+            updateInput.checked = settings?.checkUpdates !== false;
             clearLabel.hidden = !settings?.hasPassword;
         }).catch((err: unknown) => {
             if (!page.hidden) {
@@ -129,6 +140,7 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
             password: passwordInput.input.value,
             clearPassword: clearInput.checked,
             refreshSeconds,
+            checkUpdates: updateInput.checked,
         }).then(() => {
             passwordInput.input.value = "";
             page.hidden = true;

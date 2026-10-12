@@ -26,7 +26,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prefs.RefreshSeconds != 5 || prefs.URL != "" || prefs.Sort != "name" {
+	if prefs.RefreshSeconds != 5 || prefs.URL != "" || prefs.Sort != "name" || !prefs.CheckUpdates {
 		t.Fatalf("defaults = %+v", prefs)
 	}
 	if err := store.Save(Preferences{URL: " http://127.0.0.1:9091 ", Username: " transmission ", RefreshSeconds: 0, Sort: " ratio "}); err != nil {
@@ -36,7 +36,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prefs.URL != "http://127.0.0.1:9091" || prefs.Username != "transmission" || prefs.RefreshSeconds != 5 || prefs.Sort != "ratio" {
+	if prefs.URL != "http://127.0.0.1:9091" || prefs.Username != "transmission" || prefs.RefreshSeconds != 5 || prefs.Sort != "ratio" || prefs.CheckUpdates {
 		t.Fatalf("saved = %+v", prefs)
 	}
 	raw, err := os.ReadFile(path)
@@ -66,5 +66,38 @@ func TestNormalizeRefreshLimits(t *testing.T) {
 	}
 	if (Preferences{Sort: "-"}).Normalize().Sort != "name" {
 		t.Fatal("expected a bare reverse mark to be rejected")
+	}
+	if !(Preferences{CheckUpdates: true}).Normalize().CheckUpdates {
+		t.Fatal("normalize cleared the version check")
+	}
+}
+
+func TestVersionCheckDefaultsOn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	raw := []byte("{\n  \"version\": 1,\n  \"preferences\": {\n    \"url\": \"http://127.0.0.1:9091\",\n    \"refreshSeconds\": 5,\n    \"sort\": \"name\"\n  }\n}\n")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs, err := store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prefs.CheckUpdates || prefs.URL != "http://127.0.0.1:9091" {
+		t.Fatalf("missing field = %+v", prefs)
+	}
+	prefs.CheckUpdates = false
+	if err := store.Save(prefs); err != nil {
+		t.Fatal(err)
+	}
+	prefs, err = store.Preferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prefs.CheckUpdates || prefs.URL != "http://127.0.0.1:9091" || prefs.Sort != "name" {
+		t.Fatalf("disabled = %+v", prefs)
 	}
 }
