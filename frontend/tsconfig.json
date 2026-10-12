@@ -3,6 +3,7 @@
     "allowJs": true,
 
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
 
     "module": "ESNext",

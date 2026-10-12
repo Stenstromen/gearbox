@@ -1,6 +1,7 @@
 import {Events} from "@wailsio/runtime";
 import {TransmissionService, type Torrent, type TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatRate} from "../format";
+import {emptySelection, sameIds, selectionFromArrow, selectionFromClick, selectionFromContext, selectionFromSelectAll, type RowSelection} from "../selection";
 import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, type SortKey, type StatusFilter} from "../sort";
 import {openAddDialog, openRemoveDialog} from "./add-dialog";
 import {openContextMenu} from "./context-menu";
@@ -201,6 +202,8 @@ export function mountApp(root: HTMLElement): void {
     let torrents: Torrent[] = [];
     let selectedIds = new Set<number>();
     let cursorId: number | null = null;
+    let anchorId: number | null = null;
+    let rangeGesture: RowSelection["rangeGesture"] = null;
     let inspectorOpen = false;
     let inspectorTab: InspectorTab = "info";
     let torrentInfo: TorrentInfo | null = null;
@@ -273,16 +276,60 @@ export function mountApp(root: HTMLElement): void {
         list.querySelector(`tr[data-id="${cursorId}"]`)?.scrollIntoView({block: "nearest"});
     };
 
-    const clearSelection = () => {
-        selectedIds = new Set();
-        cursorId = null;
-        inspectorOpen = false;
-        torrentInfo = null;
-        inspectorError = "";
-        inspectorLoading = false;
-        inspectorGeneration++;
-        paint();
+    const currentSelection = (): RowSelection => ({
+        selectedIds,
+        cursorId,
+        anchorId,
+        rangeGesture,
+    });
+
+    const applySelection = (next: RowSelection, options: {openInspector: boolean; followInspector: boolean; scroll: boolean}) => {
+        const visualChange = next.cursorId !== cursorId || next.anchorId !== anchorId || !sameIds(selectedIds, next.selectedIds);
+        const cursorChanged = next.cursorId !== cursorId;
+        selectedIds = new Set(next.selectedIds);
+        cursorId = next.cursorId;
+        anchorId = next.anchorId;
+        rangeGesture = next.rangeGesture
+            ? {ids: new Set(next.rangeGesture.ids), additive: next.rangeGesture.additive}
+            : null;
+        if (cursorId === null) {
+            inspectorOpen = false;
+            torrentInfo = null;
+            inspectorError = "";
+            inspectorLoading = false;
+            inspectorGeneration++;
+            paint();
+            return;
+        }
+        if (!visualChange) {
+            if (options.scroll) {
+                scrollCursor();
+            }
+            return;
+        }
+        if (options.openInspector || (options.followInspector && inspectorOpen && cursorChanged)) {
+            showInspector(cursorId);
+        } else {
+            paint();
+        }
+        if (options.scroll) {
+            scrollCursor();
+        }
     };
+
+    const clearSelection = () => {
+        if (selectedIds.size === 0 && cursorId === null && anchorId === null && rangeGesture === null) {
+            return;
+        }
+        applySelection(emptySelection(), {openInspector: false, followInspector: false, scroll: false});
+    };
+
+    list.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target === list || (target instanceof HTMLElement && target.classList.contains("empty"))) {
+            clearSelection();
+        }
+    });
 
     const showInspector = (id: number) => {
         inspectorOpen = true;
@@ -301,49 +348,35 @@ export function mountApp(root: HTMLElement): void {
         clearSelection();
     };
 
-    const selectTorrent = (id: number) => {
-        if (cursorId === id && selectedIds.size === 1 && selectedIds.has(id)) {
-            clearSelection();
-            return;
-        }
-        selectedIds = new Set([id]);
-        cursorId = id;
-        showInspector(id);
+    const selectTorrent = (id: number, modifiers: {toggle: boolean; range: boolean}) => {
+        const visibleIds = visibleTorrents().map((torrent) => torrent.id);
+        const next = selectionFromClick(currentSelection(), visibleIds, id, modifiers);
+        applySelection(next, {
+            openInspector: !modifiers.toggle && !modifiers.range,
+            followInspector: true,
+            scroll: false,
+        });
     };
 
-    const moveCursor = (delta: number) => {
-        const rows = visibleTorrents();
-        if (rows.length === 0) {
-            return;
-        }
-        const index = cursorId === null ? -1 : rows.findIndex((torrent) => torrent.id === cursorId);
-        const start = index === -1 ? (delta > 0 ? -1 : rows.length) : index;
-        const next = rows[Math.min(rows.length - 1, Math.max(0, start + delta))];
-        if (!next || (next.id === cursorId && selectedIds.size === 1 && selectedIds.has(next.id))) {
+    const moveCursor = (delta: number, extend: boolean) => {
+        const visibleIds = visibleTorrents().map((torrent) => torrent.id);
+        const current = currentSelection();
+        const next = selectionFromArrow(current, visibleIds, delta, extend);
+        if (next === current) {
             scrollCursor();
             return;
         }
-        selectedIds = new Set([next.id]);
-        const changed = cursorId !== next.id;
-        cursorId = next.id;
-        if (inspectorOpen && changed) {
-            showInspector(next.id);
-        } else {
-            paint();
-        }
-        scrollCursor();
+        applySelection(next, {openInspector: false, followInspector: true, scroll: true});
     };
 
     const selectAll = () => {
-        const rows = visibleTorrents();
-        if (rows.length === 0) {
+        const visibleIds = visibleTorrents().map((torrent) => torrent.id);
+        const current = currentSelection();
+        const next = selectionFromSelectAll(current, visibleIds);
+        if (next === current) {
             return;
         }
-        selectedIds = new Set(rows.map((torrent) => torrent.id));
-        if (cursorId === null || !selectedIds.has(cursorId)) {
-            cursorId = rows[0].id;
-        }
-        paint();
+        applySelection(next, {openInspector: false, followInspector: true, scroll: false});
     };
 
     const toggleInspector = () => {
@@ -522,6 +555,22 @@ export function mountApp(root: HTMLElement): void {
                     inspectorGeneration++;
                 }
             }
+            if (selectedIds.size === 0) {
+                cursorId = null;
+                anchorId = null;
+                rangeGesture = null;
+            } else if (anchorId !== null && !torrents.some((torrent) => torrent.id === anchorId)) {
+                anchorId = cursorId;
+            }
+            if (rangeGesture && selectedIds.size > 0) {
+                const ids = new Set<number>();
+                for (const id of rangeGesture.ids) {
+                    if (torrents.some((torrent) => torrent.id === id)) {
+                        ids.add(id);
+                    }
+                }
+                rangeGesture = {ids, additive: rangeGesture.additive};
+            }
             paint();
             if (inspectorOpen && cursorId !== null) {
                 void loadInspector(cursorId);
@@ -640,18 +689,14 @@ export function mountApp(root: HTMLElement): void {
         if (preferencesOpen || document.querySelector(".modal-backdrop")) {
             return;
         }
-        if (!selectedIds.has(id)) {
-            selectedIds = new Set([id]);
-            const changed = cursorId !== id;
-            cursorId = id;
-            if (inspectorOpen && changed) {
-                showInspector(id);
-            } else {
-                paint();
-            }
-        } else if (cursorId !== id) {
-            cursorId = id;
-            paint();
+        const current = currentSelection();
+        const next = selectionFromContext(current, id);
+        if (next !== current) {
+            applySelection(next, {
+                openInspector: false,
+                followInspector: !current.selectedIds.has(id),
+                scroll: false,
+            });
         }
         const chosen = selectedTorrents();
         const ready = chosen.length > 0 && !acting;
@@ -752,7 +797,7 @@ export function mountApp(root: HTMLElement): void {
         }
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            moveCursor(event.key === "ArrowDown" ? 1 : -1);
+            moveCursor(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
             return;
         }
         if (event.repeat) {

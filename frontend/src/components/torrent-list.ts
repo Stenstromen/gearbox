@@ -1,12 +1,24 @@
 import type {Torrent} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatBytes, formatPercent, formatRate} from "../format";
+import type {SelectionModifiers} from "../selection";
 
 export type ListSelection = {
     selectedIds: ReadonlySet<number>;
     cursorId: number | null;
-    onSelect: (id: number) => void;
+    onSelect: (id: number, modifiers: SelectionModifiers) => void;
     onContextMenu: (id: number, x: number, y: number) => void;
 };
+
+let pointerSerial = 0;
+let consumedSerial = 0;
+
+function takePointerGesture(): boolean {
+    if (pointerSerial === 0 || consumedSerial === pointerSerial) {
+        return false;
+    }
+    consumedSerial = pointerSerial;
+    return true;
+}
 
 export function renderTorrentList(host: HTMLElement, torrents: Torrent[], emptyLabel = "No torrents", selection?: ListSelection): void {
     host.replaceChildren();
@@ -56,8 +68,35 @@ function renderRow(torrent: Torrent, selection?: ListSelection): HTMLTableRowEle
     row.dataset.id = String(torrent.id);
     row.setAttribute("aria-selected", selected ? "true" : "false");
     if (selection) {
-        row.addEventListener("click", () => selection.onSelect(torrent.id));
+        row.addEventListener("pointerdown", (event) => {
+            if (event.button === 0) {
+                pointerSerial += 1;
+            }
+        });
+        row.addEventListener("click", (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+            if (event.ctrlKey && !takePointerGesture()) {
+                return;
+            }
+            event.stopPropagation();
+            selection.onSelect(torrent.id, {
+                toggle: event.metaKey || event.ctrlKey,
+                range: event.shiftKey,
+            });
+        });
         row.addEventListener("contextmenu", (event) => {
+            if (event.ctrlKey) {
+                event.preventDefault();
+                if (takePointerGesture()) {
+                    selection.onSelect(torrent.id, {
+                        toggle: true,
+                        range: event.shiftKey,
+                    });
+                }
+                return;
+            }
             event.preventDefault();
             selection.onContextMenu(torrent.id, event.clientX, event.clientY);
         });
