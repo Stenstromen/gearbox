@@ -890,7 +890,7 @@ func (c *Client) call(ctx context.Context, method string, args any, out any) err
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxRPCBody))
 		resp.Body.Close()
 		if readErr != nil {
-			return readErr
+			return fmt.Errorf("reach transmission: %w", readErr)
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			return fmt.Errorf("transmission authentication failed")

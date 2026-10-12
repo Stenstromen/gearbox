@@ -9,8 +9,10 @@ import {fillTorrentInfo, renderInspector, type InspectorTab} from "./inspector";
 import {createSortField} from "./sort-menu";
 import {createStatusField} from "./status-menu";
 import {renderTorrentList} from "./torrent-list";
+import {mountToast} from "./toast";
 
 let refreshMs = 5000;
+const reconnectDelayMs = 3000;
 
 export function mountApp(root: HTMLElement): void {
     const toolbar = document.createElement("div");
@@ -186,6 +188,11 @@ export function mountApp(root: HTMLElement): void {
     let acting = false;
     let loaded = false;
     let timer = 0;
+    let reconnecting = false;
+    let reconnectAttempt = 0;
+    let reconnectTimer = 0;
+    let reconnectWaiting = false;
+    const toast = mountToast();
     let sortKey: SortKey = "name";
     let sortReversed = false;
     let sortTouched = false;
@@ -372,9 +379,13 @@ export function mountApp(root: HTMLElement): void {
             if (generation !== inspectorGeneration || cursorId !== id || !inspectorOpen) {
                 return;
             }
+            const unavailable = isUnavailable(err);
+            if (unavailable) {
+                failConnection();
+            }
             if (!hadInfo) {
                 torrentInfo = null;
-                inspectorError = errorMessage(err);
+                inspectorError = unavailable ? "Transmission is unavailable" : errorMessage(err);
                 paintInspector(false);
             }
         } finally {
@@ -402,15 +413,98 @@ export function mountApp(root: HTMLElement): void {
         }
     });
 
+    const reconnectStatus = (attempt: number) => {
+        const seconds = reconnectDelayMs / 1000;
+        return `Attempt ${attempt}. Next try in ${seconds} seconds.`;
+    };
+
+    const runReconnect = () => {
+        reconnectTimer = 0;
+        if (document.visibilityState !== "visible") {
+            reconnectWaiting = false;
+            return;
+        }
+        if (inFlight) {
+            reconnectTimer = window.setTimeout(runReconnect, reconnectDelayMs);
+            return;
+        }
+        reconnectWaiting = false;
+        void load();
+    };
+
+    const failConnection = () => {
+        if (!reconnecting) {
+            reconnecting = true;
+            reconnectAttempt = 0;
+            armRefresh();
+        }
+        if (reconnectWaiting) {
+            return;
+        }
+        reconnectWaiting = true;
+        reconnectAttempt += 1;
+        toast.show("Transmission unavailable", reconnectStatus(reconnectAttempt), "pending");
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = window.setTimeout(runReconnect, reconnectDelayMs);
+    };
+
+    const restoreConnection = () => {
+        const wasDown = reconnecting;
+        reconnecting = false;
+        reconnectAttempt = 0;
+        reconnectWaiting = false;
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = 0;
+        if (!wasDown) {
+            return;
+        }
+        armRefresh();
+        toast.show("Reconnected", "", "success");
+    };
+
+    const stopReconnect = () => {
+        const wasDown = reconnecting;
+        reconnecting = false;
+        reconnectAttempt = 0;
+        reconnectWaiting = false;
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = 0;
+        if (!wasDown) {
+            return;
+        }
+        toast.hide();
+        armRefresh();
+    };
+
+    const armRefresh = () => {
+        window.clearInterval(timer);
+        timer = 0;
+        if (reconnecting) {
+            return;
+        }
+        timer = window.setInterval(() => {
+            if (document.visibilityState === "visible") {
+                void load();
+            }
+        }, refreshMs);
+    };
+
     const load = async () => {
         if (inFlight) {
             reloadQueued = true;
             return;
         }
         inFlight = true;
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = 0;
+        reconnectWaiting = false;
+        if (reconnecting) {
+            toast.show("Transmission unavailable", "Reconnecting…", "pending");
+        }
         try {
             torrents = (await TransmissionService.ListTorrents()) ?? [];
             loaded = true;
+            restoreConnection();
             notice.hidden = true;
             notice.textContent = "";
             for (const id of Array.from(selectedIds)) {
@@ -433,8 +527,15 @@ export function mountApp(root: HTMLElement): void {
                 void loadInspector(cursorId);
             }
         } catch (err) {
-            notice.hidden = false;
-            notice.textContent = errorMessage(err);
+            if (isUnavailable(err)) {
+                notice.hidden = true;
+                notice.textContent = "";
+                failConnection();
+            } else {
+                stopReconnect();
+                notice.hidden = false;
+                notice.textContent = errorMessage(err);
+            }
             if (!loaded) {
                 list.replaceChildren();
             }
@@ -442,7 +543,9 @@ export function mountApp(root: HTMLElement): void {
             inFlight = false;
             if (reloadQueued) {
                 reloadQueued = false;
-                void load();
+                if (!reconnecting) {
+                    void load();
+                }
             }
         }
     };
@@ -458,8 +561,14 @@ export function mountApp(root: HTMLElement): void {
             notice.hidden = true;
             await load();
         } catch (err) {
-            notice.hidden = false;
-            notice.textContent = errorMessage(err);
+            if (isUnavailable(err)) {
+                notice.hidden = true;
+                notice.textContent = "";
+                failConnection();
+            } else {
+                notice.hidden = false;
+                notice.textContent = errorMessage(err);
+            }
         } finally {
             acting = false;
             paint();
@@ -685,17 +794,12 @@ export function mountApp(root: HTMLElement): void {
         }
     });
 
-    const armRefresh = () => {
-        window.clearInterval(timer);
-        timer = window.setInterval(() => {
-            if (document.visibilityState === "visible") {
-                void load();
-            }
-        }, refreshMs);
-    };
     armRefresh();
 
-    window.addEventListener("beforeunload", () => window.clearInterval(timer));
+    window.addEventListener("beforeunload", () => {
+        window.clearInterval(timer);
+        window.clearTimeout(reconnectTimer);
+    });
 
     void TransmissionService.GetSettings().then((settings) => {
         if (settings && settings.refreshSeconds >= 1) {
@@ -776,6 +880,13 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 function isResizeHandle(target: EventTarget | null): boolean {
     return target instanceof Element && target.closest(".inspector-resize") !== null;
+}
+
+function isUnavailable(err: unknown): boolean {
+    const message = errorMessage(err).toLowerCase();
+    return message.includes("reach transmission")
+        || message.includes("transmission rejected the session id")
+        || /transmission returned http (502|503|504)\b/.test(message);
 }
 
 function errorMessage(err: unknown): string {

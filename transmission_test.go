@@ -55,6 +55,21 @@ func TestNewClientFromEnvRequiresURL(t *testing.T) {
 	}
 }
 
+func TestListTorrentsUnreachable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	endpoint := server.URL + "/transmission/rpc"
+	server.Close()
+
+	client, err := NewClient(endpoint, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.ListTorrents(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "reach transmission") {
+		t.Fatalf("ListTorrents() err = %v, want a reach transmission error", err)
+	}
+}
+
 func TestListTorrents(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
