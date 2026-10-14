@@ -10,15 +10,38 @@ export type ListSelection = {
     onContextMenu: (id: number, x: number, y: number) => void;
 };
 
-let pointerSerial = 0;
-let consumedSerial = 0;
+let pressToken = 0;
+let lastPressAt = 0;
 
-function takePointerGesture(): boolean {
-    if (pointerSerial === 0 || consumedSerial === pointerSerial) {
-        return false;
-    }
-    consumedSerial = pointerSerial;
-    return true;
+function modifiersFrom(event: MouseEvent): SelectionModifiers {
+    return {
+        toggle: event.metaKey || event.ctrlKey,
+        range: event.shiftKey,
+    };
+}
+
+function beginPress(): void {
+    const token = ++pressToken;
+    lastPressAt = performance.now();
+    requestAnimationFrame(() => {
+        if (pressToken === token) {
+            pressToken = 0;
+        }
+    });
+}
+
+if (typeof window !== "undefined") {
+    window.addEventListener("click", (event) => {
+        if (pressToken === 0) {
+            return;
+        }
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest(".list")) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+    }, true);
 }
 
 export function renderTorrentList(host: HTMLElement, torrents: Torrent[], emptyLabel = "No torrents", selection?: ListSelection): void {
@@ -83,36 +106,43 @@ function renderRow(torrent: Torrent, selection?: ListSelection): HTMLTableRowEle
     row.dataset.id = String(torrent.id);
     row.setAttribute("aria-selected", selected ? "true" : "false");
     if (selection) {
+        row.addEventListener("selectstart", (event) => event.preventDefault());
+        // Select on press. The click that follows can arrive without modifier
+        // keys and would otherwise replace a shift-selected range.
         row.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            beginPress();
+            selection.onSelect(torrent.id, modifiersFrom(event));
+        });
+        row.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
-                pointerSerial += 1;
+                event.preventDefault();
             }
         });
         row.addEventListener("click", (event) => {
             if (event.button !== 0) {
                 return;
             }
-            if (event.ctrlKey && !takePointerGesture()) {
-                return;
-            }
+            event.preventDefault();
             event.stopPropagation();
-            selection.onSelect(torrent.id, {
-                toggle: event.metaKey || event.ctrlKey,
-                range: event.shiftKey,
-            });
         });
         row.addEventListener("contextmenu", (event) => {
-            if (event.ctrlKey) {
-                event.preventDefault();
-                if (takePointerGesture()) {
-                    selection.onSelect(torrent.id, {
-                        toggle: true,
-                        range: event.shiftKey,
-                    });
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                if (pressToken !== 0 || performance.now() - lastPressAt < 50) {
+                    return;
                 }
+                beginPress();
+                selection.onSelect(torrent.id, {toggle: true, range: event.shiftKey});
                 return;
             }
-            event.preventDefault();
+            if (pressToken !== 0) {
+                return;
+            }
             selection.onContextMenu(torrent.id, event.clientX, event.clientY);
         });
     }

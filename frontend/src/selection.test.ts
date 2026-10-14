@@ -39,6 +39,15 @@ expectSelection(current, [2, 3, 4], 4, 2);
 current = selectionFromClick(current, visible, 1, range);
 expectSelection(current, [1, 2], 1, 2);
 
+current = selectionFromClick(emptySelection(), visible, 2, plain);
+current = selectionFromClick(current, visible, 6, range);
+current = selectionFromClick(current, visible, 7, toggle);
+expectSelection(current, [2, 3, 4, 5, 6, 7], 7, 7);
+current = selectionFromClick(current, visible, 4, toggle);
+expectSelection(current, [2, 3, 5, 6, 7], 7, 4);
+current = selectionFromClick(current, visible, 1, toggle);
+expectSelection(current, [1, 2, 3, 5, 6, 7], 1, 1);
+
 current = selectionFromClick(emptySelection(), visible, 1, plain);
 current = selectionFromClick(current, visible, 5, toggle);
 current = selectionFromClick(current, visible, 7, range);
