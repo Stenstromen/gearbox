@@ -207,6 +207,7 @@ export function mountApp(root: HTMLElement): void {
     let inspectorOpen = false;
     let inspectorTab: InspectorTab = "info";
     let torrentInfo: TorrentInfo | null = null;
+    let torrentInfos: TorrentInfo[] = [];
     let inspectorError = "";
     let inspectorLoading = false;
     let inspectorGeneration = 0;
@@ -237,6 +238,13 @@ export function mountApp(root: HTMLElement): void {
         }
     };
 
+    const inspectorSelection = (): TorrentInfo[] => {
+        if (torrentInfos.length > 0) {
+            return torrentInfos;
+        }
+        return torrentInfo ? [torrentInfo] : [];
+    };
+
     const paintInspector = (updateValues: boolean) => {
         if (preferencesOpen) {
             inspector.hidden = true;
@@ -247,8 +255,9 @@ export function mountApp(root: HTMLElement): void {
             inspectorContent.replaceChildren();
             return;
         }
-        if (updateValues && torrentInfo && inspectorContent.querySelector(".inspector-columns")) {
-            fillTorrentInfo(inspectorContent, torrentInfo);
+        const selection = inspectorSelection();
+        if (updateValues && selection.length > 0 && inspectorContent.querySelector(".inspector-columns")) {
+            fillTorrentInfo(inspectorContent, selection);
             return;
         }
         const scroll = updateValues ? inspectorContent.querySelector(".inspector-body")?.scrollTop ?? 0 : 0;
@@ -257,6 +266,7 @@ export function mountApp(root: HTMLElement): void {
             loading: inspectorLoading,
             error: inspectorError,
             info: torrentInfo,
+            infos: selection,
         }, (tab) => {
             inspectorTab = tab;
             paintInspector(false);
@@ -286,6 +296,7 @@ export function mountApp(root: HTMLElement): void {
     const applySelection = (next: RowSelection, options: {openInspector: boolean; followInspector: boolean; scroll: boolean}) => {
         const visualChange = next.cursorId !== cursorId || next.anchorId !== anchorId || !sameIds(selectedIds, next.selectedIds);
         const cursorChanged = next.cursorId !== cursorId;
+        const selectionChanged = !sameIds(selectedIds, next.selectedIds);
         selectedIds = new Set(next.selectedIds);
         cursorId = next.cursorId;
         anchorId = next.anchorId;
@@ -295,6 +306,7 @@ export function mountApp(root: HTMLElement): void {
         if (cursorId === null) {
             inspectorOpen = false;
             torrentInfo = null;
+            torrentInfos = [];
             inspectorError = "";
             inspectorLoading = false;
             inspectorGeneration++;
@@ -307,9 +319,12 @@ export function mountApp(root: HTMLElement): void {
             }
             return;
         }
-        if (options.openInspector || (options.followInspector && inspectorOpen && cursorChanged)) {
-            showInspector(cursorId);
+        if (options.openInspector || (options.followInspector && inspectorOpen && selectionChanged)) {
+            showInspector();
         } else {
+            if (cursorChanged) {
+                torrentInfo = torrentInfos.find((info) => info.id === cursorId) ?? (torrentInfo?.id === cursorId ? torrentInfo : null);
+            }
             paint();
         }
         if (options.scroll) {
@@ -331,17 +346,20 @@ export function mountApp(root: HTMLElement): void {
         }
     });
 
-    const showInspector = (id: number) => {
+    const showInspector = () => {
         inspectorOpen = true;
-        if (torrentInfo?.id === id) {
+        const loaded = torrentInfos.length === selectedIds.size && torrentInfos.every((info) => selectedIds.has(info.id));
+        if (loaded && torrentInfos.length > 0) {
+            torrentInfo = torrentInfos.find((info) => info.id === cursorId) ?? null;
             paint();
             return;
         }
+        torrentInfos = [];
         torrentInfo = null;
         inspectorError = "";
         inspectorLoading = true;
         paint();
-        void loadInspector(id);
+        void loadInspector();
     };
 
     const closeInspector = () => {
@@ -388,43 +406,72 @@ export function mountApp(root: HTMLElement): void {
         if (cursorId === null) {
             return;
         }
-        showInspector(cursorId);
+        showInspector();
     };
 
-    const loadInspector = async (id: number) => {
+    const loadInspector = async () => {
+        const ids = [...selectedIds];
+        if (cursorId === null || ids.length === 0) {
+            return;
+        }
         const generation = ++inspectorGeneration;
-        const hadInfo = torrentInfo !== null && torrentInfo.id === id;
+        const hadInfos = ids.every((id) => torrentInfos.some((info) => info.id === id));
+        let failure = "";
         try {
-            const next = await TransmissionService.GetTorrent(id);
-            if (generation !== inspectorGeneration || cursorId !== id || !inspectorOpen) {
+            const loaded = await Promise.all(ids.map(async (id) => {
+                try {
+                    return await TransmissionService.GetTorrent(id);
+                } catch (err) {
+                    if (isUnavailable(err)) {
+                        throw err;
+                    }
+                    failure = errorMessage(err);
+                    return null;
+                }
+            }));
+            if (generation !== inspectorGeneration || !inspectorOpen || cursorId === null || !sameIds(selectedIds, new Set(ids))) {
                 return;
             }
-            if (!next) {
-                if (!hadInfo) {
-                    inspectorError = "Torrent was not found";
+            const byId = new Map<number, TorrentInfo>();
+            for (const info of loaded) {
+                if (info) {
+                    byId.set(info.id, info);
+                }
+            }
+            const ordered = ids.flatMap((id) => {
+                const info = byId.get(id);
+                return info ? [info] : [];
+            });
+            if (ordered.length === 0) {
+                if (!hadInfos) {
+                    torrentInfos = [];
+                    torrentInfo = null;
+                    inspectorError = failure || "Torrent was not found";
                 }
                 return;
             }
-            torrentInfo = next;
+            torrentInfos = ordered;
+            torrentInfo = ordered.find((info) => info.id === cursorId) ?? null;
             inspectorError = "";
-            paintInspector(hadInfo);
+            paintInspector(hadInfos);
         } catch (err) {
-            if (generation !== inspectorGeneration || cursorId !== id || !inspectorOpen) {
+            if (generation !== inspectorGeneration || !inspectorOpen || !sameIds(selectedIds, new Set(ids))) {
                 return;
             }
             const unavailable = isUnavailable(err);
             if (unavailable) {
                 failConnection();
             }
-            if (!hadInfo) {
+            if (!hadInfos) {
+                torrentInfos = [];
                 torrentInfo = null;
                 inspectorError = unavailable ? "Transmission is unavailable" : errorMessage(err);
                 paintInspector(false);
             }
         } finally {
-            if (generation === inspectorGeneration && cursorId === id && inspectorOpen) {
+            if (generation === inspectorGeneration && inspectorOpen && cursorId !== null) {
                 inspectorLoading = false;
-                if (!torrentInfo || inspectorError) {
+                if (torrentInfos.length === 0 || inspectorError) {
                     paintInspector(false);
                 }
             }
@@ -571,9 +618,16 @@ export function mountApp(root: HTMLElement): void {
                 }
                 rangeGesture = {ids, additive: rangeGesture.additive};
             }
+            torrentInfos = torrentInfos.filter((info) => selectedIds.has(info.id));
+            if (cursorId === null) {
+                torrentInfo = null;
+                torrentInfos = [];
+            } else {
+                torrentInfo = torrentInfos.find((info) => info.id === cursorId) ?? (torrentInfo?.id === cursorId ? torrentInfo : null);
+            }
             paint();
             if (inspectorOpen && cursorId !== null) {
-                void loadInspector(cursorId);
+                void loadInspector();
             }
         } catch (err) {
             if (isUnavailable(err)) {

@@ -141,7 +141,7 @@ func TestGetTorrent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		text := string(body)
-		if !strings.Contains(text, `"ids":[7]`) || !strings.Contains(text, `"availability"`) || !strings.Contains(text, `"magnetLink"`) || !strings.Contains(text, `"peers"`) || !strings.Contains(text, `"trackerStats"`) || !strings.Contains(text, `"files"`) || !strings.Contains(text, `"fileStats"`) || !strings.Contains(text, `"isFinished"`) {
+		if !strings.Contains(text, `"ids":[7]`) || !strings.Contains(text, `"availability"`) || !strings.Contains(text, `"magnetLink"`) || !strings.Contains(text, `"peers"`) || !strings.Contains(text, `"trackerStats"`) || !strings.Contains(text, `"files"`) || !strings.Contains(text, `"fileStats"`) || !strings.Contains(text, `"isFinished"`) || !strings.Contains(text, `"sizeWhenDone"`) {
 			t.Errorf("body = %s", text)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -164,6 +164,7 @@ func TestGetTorrent(t *testing.T) {
 					"eta": -1,
 					"activityDate": 1700000000,
 					"totalSize": 4096,
+					"sizeWhenDone": 3000,
 					"pieceCount": 4,
 					"pieceSize": 1024,
 					"downloadDir": "/downloads",
@@ -209,7 +210,7 @@ func TestGetTorrent(t *testing.T) {
 	if math.Abs(info.Availability-0.5) > 1e-9 {
 		t.Fatalf("availability = %v", info.Availability)
 	}
-	if info.SecondsActive != 150 || info.ETA != -1 || info.PieceCount != 4 || info.DownloadDir != "/downloads" {
+	if info.SecondsActive != 150 || info.ETA != -1 || info.PieceCount != 4 || info.SizeWhenDone != 3000 || info.DownloadDir != "/downloads" {
 		t.Fatalf("info = %+v", info)
 	}
 	if info.HashString != "abc123" || info.MagnetLink != "magnet:?xt=urn:btih:abc123" || info.UploadRatio != 3 {

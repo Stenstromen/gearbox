@@ -1,6 +1,7 @@
 import type {Peer, TorrentFile, Tracker, TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {mountColumnResize, pxFromRem, unmountColumnResize, type ColumnSpec} from "../column-resize";
-import {formatAvailability, formatBytes, formatDuration, formatLastActivity, formatPercent, formatRate, formatRatio, formatTimestamp} from "../format";
+import {formatBytes, formatPercent, formatRate} from "../format";
+import {mixedLabel, torrentInfoFields} from "../inspector-info";
 
 export const inspectorTabs = [
     {id: "info", label: "Info"},
@@ -16,6 +17,7 @@ export type InspectorState = {
     loading: boolean;
     error: string;
     info: TorrentInfo | null;
+    infos: readonly TorrentInfo[];
 };
 
 export function renderInspector(host: HTMLElement, state: InspectorState, onTab: (tab: InspectorTab) => void, onClose: () => void): void {
@@ -35,14 +37,14 @@ export function renderInspector(host: HTMLElement, state: InspectorState, onTab:
     }
 }
 
-export function fillTorrentInfo(host: HTMLElement, info: TorrentInfo): void {
-    for (const [field, value] of Object.entries(infoFields(info))) {
+export function fillTorrentInfo(host: HTMLElement, infos: readonly TorrentInfo[]): void {
+    for (const [field, value] of Object.entries(torrentInfoFields(infos))) {
         const node = host.querySelector(`[data-field="${field}"]`);
         if (!node) {
             continue;
         }
         node.textContent = value;
-        node.classList.toggle("info-error", field === "error" && info.error.trim() !== "");
+        node.classList.toggle("info-error", field === "error" && value !== "None" && value !== mixedLabel);
     }
 }
 
@@ -79,12 +81,17 @@ function panelBody(state: InspectorState): HTMLElement {
     body.id = `inspector-panel-${state.tab}`;
     body.setAttribute("role", "tabpanel");
     body.setAttribute("aria-labelledby", `inspector-tab-${state.tab}`);
-    if (!state.info) {
+    const selection = state.infos.length > 0 ? state.infos : state.info ? [state.info] : [];
+    if (selection.length === 0) {
         body.append(statusMessage(state));
         return body;
     }
     if (state.tab === "info") {
-        body.append(infoColumns(state.info));
+        body.append(infoColumns(selection));
+        return body;
+    }
+    if (!state.info) {
+        body.append(statusMessage(state));
         return body;
     }
     if (state.tab === "peer") {
@@ -111,7 +118,7 @@ function statusMessage(state: InspectorState): HTMLParagraphElement {
     return message;
 }
 
-function infoColumns(info: TorrentInfo): HTMLElement {
+function infoColumns(infos: readonly TorrentInfo[]): HTMLElement {
     const columns = document.createElement("div");
     columns.className = "inspector-columns";
     columns.append(
@@ -135,7 +142,7 @@ function infoColumns(info: TorrentInfo): HTMLElement {
             ["magnet", "Magnet"],
         ]),
     );
-    fillTorrentInfo(columns, info);
+    fillTorrentInfo(columns, infos);
     return columns;
 }
 
@@ -158,27 +165,6 @@ function infoSection(title: string, rows: readonly (readonly [string, string])[]
     }
     section.append(heading, list);
     return section;
-}
-
-function infoFields(info: TorrentInfo): Record<string, string> {
-    const pieces = info.pieceCount === 1 ? "1 piece" : `${info.pieceCount} pieces`;
-    return {
-        have: `${formatBytes(info.have)} (${formatPercent(info.percentDone)})`,
-        availability: formatAvailability(info.availability),
-        uploaded: `${formatBytes(info.uploadedEver)} (ratio ${formatRatio(info.uploadRatio)})`,
-        downloaded: formatBytes(info.downloadedEver),
-        state: info.status || "Unknown",
-        running: formatDuration(info.secondsActive),
-        remaining: formatDuration(info.eta),
-        activity: formatLastActivity(info.activityDate),
-        error: info.error.trim() || "None",
-        name: info.name || "Untitled",
-        size: `${formatBytes(info.totalSize)} (${pieces} of ${formatBytes(info.pieceSize)})`,
-        location: info.downloadDir || "—",
-        hash: info.hashString || "—",
-        added: formatTimestamp(info.addedDate),
-        magnet: info.magnetLink || "—",
-    };
 }
 
 const peerColumns = [

@@ -102,6 +102,7 @@ export interface TorrentInfo {
     "eta": number;
     "activityDate": number;
     "totalSize": number;
+    "sizeWhenDone": number;
     "pieceCount": number;
     "pieceSize": number;
     "downloadDir": string;

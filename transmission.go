@@ -258,6 +258,7 @@ type TorrentInfo struct {
 	ETA            int64         `json:"eta"`
 	ActivityDate   int64         `json:"activityDate"`
 	TotalSize      int64         `json:"totalSize"`
+	SizeWhenDone   int64         `json:"sizeWhenDone"`
 	PieceCount     int           `json:"pieceCount"`
 	PieceSize      int64         `json:"pieceSize"`
 	DownloadDir    string        `json:"downloadDir"`
@@ -534,6 +535,7 @@ type rpcTorrentInfo struct {
 	ETA                int64         `json:"eta"`
 	ActivityDate       int64         `json:"activityDate"`
 	TotalSize          int64         `json:"totalSize"`
+	SizeWhenDone       int64         `json:"sizeWhenDone"`
 	PieceCount         int           `json:"pieceCount"`
 	PieceSize          int64         `json:"pieceSize"`
 	DownloadDir        string        `json:"downloadDir"`
@@ -612,6 +614,7 @@ func (c *Client) GetTorrent(ctx context.Context, id int) (TorrentInfo, error) {
 			"eta",
 			"activityDate",
 			"totalSize",
+			"sizeWhenDone",
 			"pieceCount",
 			"pieceSize",
 			"downloadDir",
@@ -646,6 +649,7 @@ func (c *Client) GetTorrent(ctx context.Context, id int) (TorrentInfo, error) {
 		ETA:            item.ETA,
 		ActivityDate:   item.ActivityDate,
 		TotalSize:      item.TotalSize,
+		SizeWhenDone:   item.SizeWhenDone,
 		PieceCount:     item.PieceCount,
 		PieceSize:      item.PieceSize,
 		DownloadDir:    item.DownloadDir,
