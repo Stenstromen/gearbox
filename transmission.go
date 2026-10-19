@@ -29,17 +29,21 @@ const (
 )
 
 // Torrent is the slice of a Transmission torrent shown in the list.
+// DownloadDir is the folder that holds its data.
+// RecheckProgress is how much of a verify has finished, from 0 to 1.
 type Torrent struct {
-	ID             int     `json:"id"`
-	Name           string  `json:"name"`
-	PercentDone    float64 `json:"percentDone"`
-	PeersConnected int     `json:"peersConnected"`
-	RateDownload   int64   `json:"rateDownload"`
-	RateUpload     int64   `json:"rateUpload"`
-	UploadRatio    float64 `json:"uploadRatio"`
-	Status         string  `json:"status"`
-	TotalSize      int64   `json:"totalSize"`
-	Error          string  `json:"error"`
+	ID              int     `json:"id"`
+	Name            string  `json:"name"`
+	PercentDone     float64 `json:"percentDone"`
+	RecheckProgress float64 `json:"recheckProgress"`
+	PeersConnected  int     `json:"peersConnected"`
+	RateDownload    int64   `json:"rateDownload"`
+	RateUpload      int64   `json:"rateUpload"`
+	UploadRatio     float64 `json:"uploadRatio"`
+	Status          string  `json:"status"`
+	TotalSize       int64   `json:"totalSize"`
+	Error           string  `json:"error"`
+	DownloadDir     string  `json:"downloadDir"`
 }
 
 // Settings is the connection form. The password itself stays in the keychain.
@@ -415,6 +419,34 @@ func (s *TransmissionService) RemoveTorrent(ctx context.Context, id int, deleteD
 	return client.RemoveTorrent(ctx, id, deleteData)
 }
 
+// VerifyTorrent checks one torrent's local data.
+func (s *TransmissionService) VerifyTorrent(ctx context.Context, id int) error {
+	client, err := s.rpc()
+	if err != nil {
+		return err
+	}
+	return client.VerifyTorrent(ctx, id)
+}
+
+// ReannounceTorrent asks the tracker for more peers now.
+func (s *TransmissionService) ReannounceTorrent(ctx context.Context, id int) error {
+	client, err := s.rpc()
+	if err != nil {
+		return err
+	}
+	return client.ReannounceTorrent(ctx, id)
+}
+
+// SetTorrentLocation points one torrent at another folder.
+// move tells the daemon to move the files there. Otherwise it looks for them in location.
+func (s *TransmissionService) SetTorrentLocation(ctx context.Context, id int, location string, move bool) error {
+	client, err := s.rpc()
+	if err != nil {
+		return err
+	}
+	return client.SetTorrentLocation(ctx, id, location, move)
+}
+
 // SetTorrentFiles downloads, skips, or reprioritizes files in one torrent.
 func (s *TransmissionService) SetTorrentFiles(ctx context.Context, id int, update TorrentFilesUpdate) error {
 	client, err := s.rpc()
@@ -486,17 +518,19 @@ type rpcResponse struct {
 }
 
 type rpcTorrent struct {
-	ID             int     `json:"id"`
-	Name           string  `json:"name"`
-	PercentDone    float64 `json:"percentDone"`
-	PeersConnected int     `json:"peersConnected"`
-	RateDownload   int64   `json:"rateDownload"`
-	RateUpload     int64   `json:"rateUpload"`
-	UploadRatio    float64 `json:"uploadRatio"`
-	Status         int     `json:"status"`
-	IsFinished     bool    `json:"isFinished"`
-	TotalSize      int64   `json:"totalSize"`
-	ErrorString    string  `json:"errorString"`
+	ID              int     `json:"id"`
+	Name            string  `json:"name"`
+	PercentDone     float64 `json:"percentDone"`
+	RecheckProgress float64 `json:"recheckProgress"`
+	PeersConnected  int     `json:"peersConnected"`
+	RateDownload    int64   `json:"rateDownload"`
+	RateUpload      int64   `json:"rateUpload"`
+	UploadRatio     float64 `json:"uploadRatio"`
+	Status          int     `json:"status"`
+	IsFinished      bool    `json:"isFinished"`
+	TotalSize       int64   `json:"totalSize"`
+	ErrorString     string  `json:"errorString"`
+	DownloadDir     string  `json:"downloadDir"`
 }
 
 // ListTorrents requests every torrent and the fields the list view needs.
@@ -509,6 +543,7 @@ func (c *Client) ListTorrents(ctx context.Context) ([]Torrent, error) {
 			"id",
 			"name",
 			"percentDone",
+			"recheckProgress",
 			"peersConnected",
 			"rateDownload",
 			"rateUpload",
@@ -517,6 +552,7 @@ func (c *Client) ListTorrents(ctx context.Context) ([]Torrent, error) {
 			"isFinished",
 			"totalSize",
 			"errorString",
+			"downloadDir",
 		},
 	}, &arguments)
 	if err != nil {
@@ -526,16 +562,18 @@ func (c *Client) ListTorrents(ctx context.Context) ([]Torrent, error) {
 	torrents := make([]Torrent, 0, len(arguments.Torrents))
 	for _, item := range arguments.Torrents {
 		torrents = append(torrents, Torrent{
-			ID:             item.ID,
-			Name:           item.Name,
-			PercentDone:    item.PercentDone,
-			PeersConnected: item.PeersConnected,
-			RateDownload:   item.RateDownload,
-			RateUpload:     item.RateUpload,
-			UploadRatio:    item.UploadRatio,
-			Status:         statusLabel(item.Status, item.IsFinished),
-			TotalSize:      item.TotalSize,
-			Error:          item.ErrorString,
+			ID:              item.ID,
+			Name:            item.Name,
+			PercentDone:     item.PercentDone,
+			RecheckProgress: item.RecheckProgress,
+			PeersConnected:  item.PeersConnected,
+			RateDownload:    item.RateDownload,
+			RateUpload:      item.RateUpload,
+			UploadRatio:     item.UploadRatio,
+			Status:          statusLabel(item.Status, item.IsFinished),
+			TotalSize:       item.TotalSize,
+			Error:           item.ErrorString,
+			DownloadDir:     item.DownloadDir,
 		})
 	}
 	slices.SortFunc(torrents, func(a, b Torrent) int {
@@ -897,6 +935,26 @@ func (c *Client) RemoveTorrent(ctx context.Context, id int, deleteData bool) err
 	return c.call(ctx, "torrent-remove", map[string]any{
 		"ids":               []int{id},
 		"delete-local-data": deleteData,
+	}, nil)
+}
+
+func (c *Client) VerifyTorrent(ctx context.Context, id int) error {
+	return c.call(ctx, "torrent-verify", map[string]any{"ids": []int{id}}, nil)
+}
+
+func (c *Client) ReannounceTorrent(ctx context.Context, id int) error {
+	return c.call(ctx, "torrent-reannounce", map[string]any{"ids": []int{id}}, nil)
+}
+
+func (c *Client) SetTorrentLocation(ctx context.Context, id int, location string, move bool) error {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return fmt.Errorf("enter a folder")
+	}
+	return c.call(ctx, "torrent-set-location", map[string]any{
+		"ids":      []int{id},
+		"location": location,
+		"move":     move,
 	}, nil)
 }
 

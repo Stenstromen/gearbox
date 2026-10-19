@@ -4,7 +4,7 @@ import {formatRate} from "../format";
 import {applyFileUpdate, type FileUpdate} from "../files";
 import {emptySelection, sameIds, selectionFromArrow, selectionFromClick, selectionFromContext, selectionFromSelectAll, type RowSelection} from "../selection";
 import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, type SortKey, type StatusFilter} from "../sort";
-import {openAddDialog, openRemoveDialog} from "./add-dialog";
+import {openAddDialog, openLocationDialog, openRemoveDialog} from "./add-dialog";
 import {openContextMenu} from "./context-menu";
 import {createPreferencesPanel} from "./preferences";
 import {fillTorrentInfo, renderInspector, type InspectorTab} from "./inspector";
@@ -768,6 +768,48 @@ export function mountApp(root: HTMLElement): void {
             }
         });
     };
+    const verifySelected = () => {
+        const ids = selectedTorrents().map((torrent) => torrent.id);
+        if (ids.length === 0) {
+            return;
+        }
+        void runAction(async () => {
+            for (const id of ids) {
+                await TransmissionService.VerifyTorrent(id);
+            }
+        });
+    };
+    const reannounceSelected = () => {
+        const ids = selectedTorrents().map((torrent) => torrent.id);
+        if (ids.length === 0) {
+            return;
+        }
+        void runAction(async () => {
+            for (const id of ids) {
+                await TransmissionService.ReannounceTorrent(id);
+            }
+        });
+    };
+    const setLocationSelected = () => {
+        const chosen = selectedTorrents();
+        if (chosen.length === 0 || acting) {
+            return;
+        }
+        const ids = chosen.map((torrent) => torrent.id);
+        const dirs = chosen.map((torrent) => torrent.downloadDir.trim());
+        const first = dirs[0] ?? "";
+        const mixed = dirs.some((dir) => dir !== first);
+        void openLocationDialog(chosen[0].name || "this torrent", chosen.length, mixed ? "" : first, mixed).then((choice) => {
+            if (choice === null) {
+                return;
+            }
+            void runAction(async () => {
+                for (const id of ids) {
+                    await TransmissionService.SetTorrentLocation(id, choice.location, choice.move);
+                }
+            });
+        });
+    };
     const removeSelectedData = (deleteData: boolean) => {
         const chosen = selectedTorrents();
         if (chosen.length === 0 || acting) {
@@ -804,6 +846,10 @@ export function mountApp(root: HTMLElement): void {
             {label: "Resume", disabled: !ready || !chosen.some((torrent) => isStoppedStatus(torrent.status)), onSelect: startSelected},
             {label: "Pause", disabled: !ready || !chosen.some((torrent) => !isStoppedStatus(torrent.status)), onSelect: stopSelected},
             "separator",
+            {label: "Verify Local Data", disabled: !ready, onSelect: verifySelected},
+            {label: "Ask Tracker for More Peers", disabled: !ready, onSelect: reannounceSelected},
+            {label: "Set Location…", disabled: !ready, onSelect: setLocationSelected},
+            "separator",
             {label: "Remove from list…", disabled: !ready, onSelect: () => removeSelectedData(false)},
             {label: "Trash data and remove from list…", disabled: !ready, onSelect: () => removeSelectedData(true)},
         ]);
@@ -837,6 +883,21 @@ export function mountApp(root: HTMLElement): void {
     Events.On("gearbox:stop", () => {
         if (!torrentCommandsBlocked()) {
             stopSelected();
+        }
+    });
+    Events.On("gearbox:verify", () => {
+        if (!torrentCommandsBlocked()) {
+            verifySelected();
+        }
+    });
+    Events.On("gearbox:reannounce", () => {
+        if (!torrentCommandsBlocked()) {
+            reannounceSelected();
+        }
+    });
+    Events.On("gearbox:set-location", () => {
+        if (!torrentCommandsBlocked()) {
+            setLocationSelected();
         }
     });
     Events.On("gearbox:select-all", () => {

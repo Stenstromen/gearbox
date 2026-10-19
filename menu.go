@@ -10,6 +10,9 @@ const (
 	eventRemove      = "gearbox:remove"
 	eventStart       = "gearbox:start"
 	eventStop        = "gearbox:stop"
+	eventVerify      = "gearbox:verify"
+	eventReannounce  = "gearbox:reannounce"
+	eventSetLocation = "gearbox:set-location"
 	eventSelectAll   = "gearbox:select-all"
 	eventDeselect    = "gearbox:deselect"
 	eventInspector   = "gearbox:inspector"
@@ -58,6 +61,13 @@ func fileMenu(app *application.App) *application.Menu {
 	menu.Add("Stop Selected").
 		SetTooltip("Keyboard shortcut: U").
 		OnClick(emit(app, eventStop))
+	menu.AddSeparator()
+	menu.Add("Verify Local Data").
+		OnClick(emit(app, eventVerify))
+	menu.Add("Ask Tracker for More Peers").
+		OnClick(emit(app, eventReannounce))
+	menu.Add("Set Location…").
+		OnClick(emit(app, eventSetLocation))
 	menu.AddSeparator()
 	menu.AddRole(application.CloseWindow)
 	return menu

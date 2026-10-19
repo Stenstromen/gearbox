@@ -83,7 +83,7 @@ func TestListTorrents(t *testing.T) {
 			return
 		}
 		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), `"method":"torrent-get"`) || !strings.Contains(string(body), `"uploadRatio"`) || !strings.Contains(string(body), `"isFinished"`) {
+		if !strings.Contains(string(body), `"method":"torrent-get"`) || !strings.Contains(string(body), `"uploadRatio"`) || !strings.Contains(string(body), `"isFinished"`) || !strings.Contains(string(body), `"downloadDir"`) || !strings.Contains(string(body), `"recheckProgress"`) {
 			t.Errorf("body = %s", body)
 		}
 		if r.Header.Get("X-Transmission-Session-Id") != "session" {
@@ -97,8 +97,8 @@ func TestListTorrents(t *testing.T) {
 				"torrents": [
 					{"id":2,"name":"Beta","percentDone":1,"peersConnected":0,"rateDownload":0,"rateUpload":10,"status":6,"isFinished":false,"totalSize":100,"errorString":"","uploadRatio":2.5},
 					{"id":3,"name":"Complete","percentDone":1,"peersConnected":0,"rateDownload":0,"rateUpload":0,"status":0,"isFinished":true,"totalSize":100,"errorString":"","uploadRatio":2},
-					{"id":4,"name":"Paused","percentDone":0.2,"peersConnected":0,"rateDownload":0,"rateUpload":0,"status":0,"isFinished":false,"totalSize":100,"errorString":"","uploadRatio":0},
-					{"id":1,"name":"Alpha","percentDone":0.5,"peersConnected":3,"rateDownload":2048,"rateUpload":512,"status":4,"isFinished":false,"totalSize":4096,"errorString":"tracker down","uploadRatio":0.25}
+					{"id":4,"name":"Paused","percentDone":0.2,"recheckProgress":0.35,"peersConnected":0,"rateDownload":0,"rateUpload":0,"status":2,"isFinished":false,"totalSize":100,"errorString":"","uploadRatio":0},
+					{"id":1,"name":"Alpha","percentDone":0.5,"peersConnected":3,"rateDownload":2048,"rateUpload":512,"status":4,"isFinished":false,"totalSize":4096,"errorString":"tracker down","uploadRatio":0.25,"downloadDir":"/downloads/alpha"}
 				]
 			},
 			"result": "success"
@@ -123,7 +123,7 @@ func TestListTorrents(t *testing.T) {
 	if torrents[0].Name != "Alpha" || torrents[0].Status != "Downloading" || torrents[0].PeersConnected != 3 {
 		t.Fatalf("first torrent = %+v", torrents[0])
 	}
-	if torrents[0].Error != "tracker down" || torrents[0].RateDownload != 2048 || torrents[0].UploadRatio != 0.25 {
+	if torrents[0].Error != "tracker down" || torrents[0].RateDownload != 2048 || torrents[0].UploadRatio != 0.25 || torrents[0].DownloadDir != "/downloads/alpha" {
 		t.Fatalf("first torrent rates/error = %+v", torrents[0])
 	}
 	if torrents[1].Name != "Beta" || torrents[1].Status != "Seeding" || torrents[1].PercentDone != 1 {
@@ -132,8 +132,8 @@ func TestListTorrents(t *testing.T) {
 	if torrents[2].Name != "Complete" || torrents[2].Status != "Seeding complete" {
 		t.Fatalf("finished torrent = %+v", torrents[2])
 	}
-	if torrents[3].Name != "Paused" || torrents[3].Status != "Stopped" {
-		t.Fatalf("stopped torrent = %+v", torrents[3])
+	if torrents[3].Name != "Paused" || torrents[3].Status != "Verifying" || torrents[3].RecheckProgress != 0.35 || torrents[3].PercentDone != 0.2 {
+		t.Fatalf("verifying torrent = %+v", torrents[3])
 	}
 }
 
@@ -603,5 +603,52 @@ func TestStartStopRemove(t *testing.T) {
 	}
 	if !strings.Contains(calls[2], `"torrent-remove"`) || !strings.Contains(calls[2], `"delete-local-data":true`) {
 		t.Fatalf("remove = %s", calls[2])
+	}
+}
+
+func TestVerifyReannounceSetLocation(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls = append(calls, string(body))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"arguments":{},"result":"success"}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := client.VerifyTorrent(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.ReannounceTorrent(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentLocation(ctx, 4, " /media/tv ", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentLocation(ctx, 4, "/media/already", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentLocation(ctx, 4, "   ", true); err == nil || !strings.Contains(err.Error(), "enter a folder") {
+		t.Fatalf("empty location = %v", err)
+	}
+	if len(calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(calls))
+	}
+	if !strings.Contains(calls[0], `"torrent-verify"`) || !strings.Contains(calls[0], `"ids":[4]`) {
+		t.Fatalf("verify = %s", calls[0])
+	}
+	if !strings.Contains(calls[1], `"torrent-reannounce"`) || !strings.Contains(calls[1], `"ids":[4]`) {
+		t.Fatalf("reannounce = %s", calls[1])
+	}
+	if !strings.Contains(calls[2], `"torrent-set-location"`) || !strings.Contains(calls[2], `"location":"/media/tv"`) || !strings.Contains(calls[2], `"move":true`) {
+		t.Fatalf("move = %s", calls[2])
+	}
+	if !strings.Contains(calls[3], `"torrent-set-location"`) || !strings.Contains(calls[3], `"location":"/media/already"`) || !strings.Contains(calls[3], `"move":false`) {
+		t.Fatalf("find = %s", calls[3])
 	}
 }

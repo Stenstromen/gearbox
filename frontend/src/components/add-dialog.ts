@@ -331,6 +331,174 @@ function validTorrentURL(value: string): boolean {
     }
 }
 
+export type LocationChoice = {
+    location: string;
+    move: boolean;
+};
+
+export function openLocationDialog(name: string, count: number, initialPath: string, mixed: boolean): Promise<LocationChoice | null> {
+    if (document.querySelector(".modal-backdrop")) {
+        return Promise.resolve(null);
+    }
+    const previous = document.activeElement;
+    let locationGeneration = 0;
+    let closed = false;
+    let spaceTimer = 0;
+    return new Promise((resolve) => {
+        const backdrop = document.createElement("div");
+        backdrop.className = "modal-backdrop";
+        const dialog = document.createElement("form");
+        dialog.className = "modal";
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.setAttribute("aria-labelledby", "set-location-title");
+
+        const title = document.createElement("h2");
+        title.id = "set-location-title";
+        title.textContent = "Set Location";
+
+        const prompt = document.createElement("p");
+        prompt.className = "modal-prompt";
+        prompt.textContent = locationPrompt(name, count, mixed);
+
+        const destination = document.createElement("p");
+        destination.className = "modal-destination";
+        destination.textContent = "Destination folder";
+
+        const directoryInput = document.createElement("input");
+        directoryInput.type = "text";
+        directoryInput.className = "modal-path";
+        directoryInput.spellcheck = false;
+        directoryInput.autocomplete = "off";
+        directoryInput.setAttribute("aria-label", "Destination folder");
+        directoryInput.value = initialPath;
+
+        const choices = document.createElement("div");
+        choices.className = "modal-choices";
+        const moveInput = document.createElement("input");
+        moveInput.type = "radio";
+        moveInput.name = "torrent-location";
+        moveInput.checked = true;
+        const findInput = document.createElement("input");
+        findInput.type = "radio";
+        findInput.name = "torrent-location";
+        choices.append(
+            locationChoice(moveInput, "Move the data files to this folder"),
+            locationChoice(findInput, "Find the data files in this folder"),
+        );
+
+        const error = document.createElement("p");
+        error.className = "modal-error";
+        error.hidden = true;
+
+        const actions = document.createElement("div");
+        actions.className = "modal-actions";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "modal-button";
+        cancel.textContent = "Cancel";
+        const apply = document.createElement("button");
+        apply.type = "submit";
+        apply.className = "modal-button modal-primary";
+        apply.textContent = "Set Location";
+        actions.append(cancel, apply);
+
+        dialog.append(title, prompt, destination, directoryInput, choices, error, actions);
+        backdrop.append(dialog);
+        document.body.append(backdrop);
+
+        const finish = (choice: LocationChoice | null) => {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            window.clearTimeout(spaceTimer);
+            locationGeneration++;
+            backdrop.remove();
+            if (previous instanceof HTMLElement) {
+                previous.focus();
+            }
+            resolve(choice);
+        };
+
+        const refreshSpace = (path: string) => {
+            const generation = ++locationGeneration;
+            void TransmissionService.DownloadLocation(path).then((location) => {
+                if (generation !== locationGeneration || !backdrop.isConnected) {
+                    return;
+                }
+                destination.textContent = location.freeBytes < 0
+                    ? "Destination folder"
+                    : `Destination folder: ${formatBytes(location.freeBytes)} Free`;
+            }).catch(() => {
+                if (generation === locationGeneration && backdrop.isConnected) {
+                    destination.textContent = "Destination folder";
+                }
+            });
+        };
+
+        directoryInput.addEventListener("input", () => {
+            error.hidden = true;
+            window.clearTimeout(spaceTimer);
+            const path = directoryInput.value.trim();
+            if (path === "") {
+                destination.textContent = "Destination folder";
+                return;
+            }
+            spaceTimer = window.setTimeout(() => refreshSpace(path), 400);
+        });
+
+        cancel.addEventListener("click", () => finish(null));
+        backdrop.addEventListener("click", (event) => {
+            if (event.target === backdrop) {
+                finish(null);
+            }
+        });
+        dialog.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                finish(null);
+            }
+        });
+        dialog.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const location = directoryInput.value.trim();
+            if (location === "") {
+                error.hidden = false;
+                error.textContent = "Enter a folder.";
+                directoryInput.focus();
+                return;
+            }
+            finish({location, move: moveInput.checked});
+        });
+
+        directoryInput.focus();
+        directoryInput.select();
+        if (initialPath.trim() !== "") {
+            refreshSpace(initialPath.trim());
+        }
+    });
+}
+
+function locationChoice(input: HTMLInputElement, label: string): HTMLLabelElement {
+    const row = document.createElement("label");
+    row.className = "modal-check";
+    const text = document.createElement("span");
+    text.textContent = label;
+    row.append(input, text);
+    return row;
+}
+
+function locationPrompt(name: string, count: number, mixed: boolean): string {
+    if (mixed) {
+        return `These torrents are in different folders. Choose one folder for all ${count}.`;
+    }
+    if (count === 1) {
+        return `Choose a folder for “${name}”.`;
+    }
+    return `Choose a folder for ${count} torrents.`;
+}
+
 function dialogError(err: unknown): string {
     if (err instanceof Error && err.message) {
         return err.message;

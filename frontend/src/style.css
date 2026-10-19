@@ -472,6 +472,11 @@ body.is-col-resizing * {
     overflow: hidden;
 }
 
+.bar.is-verifying {
+    background: #f8e7a4;
+    border-color: #c9a44a;
+}
+
 .bar-fill {
     position: absolute;
     z-index: 1;
@@ -504,6 +509,11 @@ body.is-col-resizing * {
 .status-downloading { color: var(--down); }
 .status-seeding { color: var(--accent); }
 .status-stopped, .status-seeding-complete { color: var(--stopped); }
+.status-verifying, .status-queued-to-verify { color: #e6b800; }
+
+.bar.is-verifying .bar-label-on {
+    color: #3a2a00;
+}
 
 .inspector {
     flex: none;
@@ -932,7 +942,7 @@ body.is-resizing {
     font-weight: 650;
 }
 
-.modal-field input, .modal input[aria-label="Destination folder"] {
+.modal-field input, .modal input[aria-label="Destination folder"], .modal-path {
     width: 100%;
     border: 1px solid #3c4452;
     background: #121316;
@@ -942,8 +952,24 @@ body.is-resizing {
     font: inherit;
 }
 
-.modal-field input:focus, .modal input[aria-label="Destination folder"]:focus {
+.modal-field input:focus, .modal input[aria-label="Destination folder"]:focus, .modal-path:focus {
     border-color: var(--accent);
+}
+
+.modal-path {
+    margin-bottom: 12px;
+}
+
+.modal-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0 8px;
+}
+
+.modal-choices .modal-check {
+    margin: 0;
+    font-weight: 500;
 }
 
 .modal-check {

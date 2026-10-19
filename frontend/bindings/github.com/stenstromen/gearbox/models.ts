@@ -60,11 +60,14 @@ export interface SettingsInput {
 
 /**
  * Torrent is the slice of a Transmission torrent shown in the list.
+ * DownloadDir is the folder that holds its data.
+ * RecheckProgress is how much of a verify has finished, from 0 to 1.
  */
 export interface Torrent {
     "id": number;
     "name": string;
     "percentDone": number;
+    "recheckProgress": number;
     "peersConnected": number;
     "rateDownload": number;
     "rateUpload": number;
@@ -72,6 +75,7 @@ export interface Torrent {
     "status": string;
     "totalSize": number;
     "error": string;
+    "downloadDir": string;
 }
 
 /**

@@ -176,12 +176,14 @@ function progressCell(torrent: Torrent): HTMLTableCellElement {
     status.className = message ? "status status-error" : "status";
     status.textContent = message || torrent.status;
     status.title = status.textContent;
-    const percent = formatPercent(torrent.percentDone);
+    const verifying = isVerifying(torrent.status);
+    const fraction = verifying ? torrent.recheckProgress : torrent.percentDone;
+    const percent = formatPercent(fraction);
     const track = document.createElement("span");
-    track.className = "bar";
+    track.className = verifying ? "bar is-verifying" : "bar";
     const fill = document.createElement("span");
     fill.className = `bar-fill status-${slug(torrent.status)}`;
-    const width = Math.min(100, Math.max(0, torrent.percentDone * 100));
+    const width = Math.min(100, Math.max(0, fraction * 100));
     fill.style.width = `${width}%`;
     fill.append(barLabel(percent, "bar-label-on"));
     track.append(fill, barLabel(percent, "bar-label-off"));
@@ -201,6 +203,10 @@ function textCell(value: string, className: string): HTMLTableCellElement {
     cell.className = className;
     cell.textContent = value;
     return cell;
+}
+
+function isVerifying(status: string): boolean {
+    return status === "Verifying" || status === "Queued to verify";
 }
 
 function slug(status: string): string {

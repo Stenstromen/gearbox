@@ -65,6 +65,13 @@ export function ListTorrents(): $CancellablePromise<$models.Torrent[] | null> {
 }
 
 /**
+ * ReannounceTorrent asks the tracker for more peers now.
+ */
+export function ReannounceTorrent(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1422744503, id);
+}
+
+/**
  * RemoveTorrent drops one torrent from the daemon.
  * deleteData also removes the downloaded files.
  */
@@ -95,6 +102,14 @@ export function SetTorrentFiles(id: number, update: $models.TorrentFilesUpdate):
 }
 
 /**
+ * SetTorrentLocation points one torrent at another folder.
+ * move tells the daemon to move the files there. Otherwise it looks for them in location.
+ */
+export function SetTorrentLocation(id: number, location: string, move: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3744732816, id, location, move);
+}
+
+/**
  * StartTorrent resumes one torrent.
  */
 export function StartTorrent(id: number): $CancellablePromise<void> {
@@ -113,4 +128,11 @@ export function StopTorrent(id: number): $CancellablePromise<void> {
  */
 export function TakeOpenError(): $CancellablePromise<string> {
     return $Call.ByID(2330326664);
+}
+
+/**
+ * VerifyTorrent checks one torrent's local data.
+ */
+export function VerifyTorrent(id: number): $CancellablePromise<void> {
+    return $Call.ByID(3130952170, id);
 }
