@@ -88,6 +88,13 @@ export function SetSort(sort: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetTorrentFiles downloads, skips, or reprioritizes files in one torrent.
+ */
+export function SetTorrentFiles(id: number, update: $models.TorrentFilesUpdate): $CancellablePromise<void> {
+    return $Call.ByID(465005406, id, update);
+}
+
+/**
  * StartTorrent resumes one torrent.
  */
 export function StartTorrent(id: number): $CancellablePromise<void> {

@@ -182,11 +182,12 @@ func TestGetTorrent(t *testing.T) {
 					"files": [
 						{"name":"Movie/video.mkv","length":4000,"bytesCompleted":1000},
 						{"name":"Movie/subs/en.srt","length":100,"bytesCompleted":0},
-						{"name":"readme.txt","length":20,"bytesCompleted":20}
+						{"name":"readme.txt","length":20,"bytesCompleted":20},
+						{"name":"extra.bin","length":5,"bytesCompleted":1}
 					],
 					"fileStats": [
-						{"bytesCompleted":2000},
-						{"bytesCompleted":100},
+						{"bytesCompleted":2000,"wanted":true,"priority":1},
+						{"bytesCompleted":100,"wanted":false,"priority":-1},
 						{"bytesCompleted":20}
 					]
 				}]
@@ -231,11 +232,79 @@ func TestGetTorrent(t *testing.T) {
 	if info.Trackers[1].LastAnnounceSucceeded || info.Trackers[1].DownloadCount != -1 {
 		t.Fatalf("second tracker = %+v", info.Trackers[1])
 	}
-	if len(info.Files) != 3 || info.Files[0].Name != "Movie/video.mkv" || info.Files[0].Size != 4000 || info.Files[0].Have != 2000 {
+	if len(info.Files) != 4 || info.Files[0].Name != "Movie/video.mkv" || info.Files[0].Size != 4000 || info.Files[0].Have != 2000 || info.Files[0].Index != 0 || !info.Files[0].Wanted || info.Files[0].Priority != 1 {
 		t.Fatalf("files = %+v", info.Files)
 	}
-	if info.Files[1].Have != 100 || info.Files[2].Name != "readme.txt" || info.Files[2].Have != 20 {
+	if info.Files[1].Have != 100 || info.Files[1].Wanted || info.Files[1].Priority != -1 || info.Files[1].Index != 1 {
 		t.Fatalf("files = %+v", info.Files)
+	}
+	if info.Files[2].Name != "readme.txt" || info.Files[2].Have != 20 || !info.Files[2].Wanted || info.Files[2].Priority != 0 {
+		t.Fatalf("files = %+v", info.Files)
+	}
+	if info.Files[3].Name != "extra.bin" || info.Files[3].Have != 1 || !info.Files[3].Wanted || info.Files[3].Priority != 0 || info.Files[3].Index != 3 {
+		t.Fatalf("files = %+v", info.Files)
+	}
+}
+
+func TestSetTorrentFiles(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls = append(calls, string(body))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"arguments":{},"result":"success"}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{}); err == nil || !strings.Contains(err.Error(), "choose download or priority") {
+		t.Fatalf("empty update = %v", err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetPriority: true, Priority: "urgent"}); err == nil || !strings.Contains(err.Error(), "low, normal, or high") {
+		t.Fatalf("priority error = %v", err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetWanted: true, Wanted: false}); err == nil || !strings.Contains(err.Error(), "choose a file") {
+		t.Fatalf("indices error = %v", err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetWanted: true, Indices: []int{1, -1}}); err == nil || !strings.Contains(err.Error(), "unknown file") {
+		t.Fatalf("index error = %v", err)
+	}
+	if len(calls) != 0 {
+		t.Fatalf("validation called the daemon: %s", calls)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetWanted: true, Wanted: false, Indices: []int{2, 2, 0}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetWanted: true, Wanted: true, SetPriority: true, Priority: " high ", Indices: []int{1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetPriority: true, Priority: "low", Indices: []int{0}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetTorrentFiles(ctx, 4, TorrentFilesUpdate{SetPriority: true, Priority: "normal", Indices: []int{3}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 4 {
+		t.Fatalf("calls = %s", calls)
+	}
+	if !strings.Contains(calls[0], `"torrent-set"`) || !strings.Contains(calls[0], `"ids":[4]`) || !strings.Contains(calls[0], `"files-unwanted":[2,0]`) {
+		t.Fatalf("skip = %s", calls[0])
+	}
+	if strings.Contains(calls[0], "priority-") || strings.Contains(calls[0], "files-wanted") {
+		t.Fatalf("skip included extra fields: %s", calls[0])
+	}
+	if !strings.Contains(calls[1], `"files-wanted":[1]`) || !strings.Contains(calls[1], `"priority-high":[1]`) {
+		t.Fatalf("download and priority = %s", calls[1])
+	}
+	if !strings.Contains(calls[2], `"priority-low":[0]`) || strings.Contains(calls[2], "files-") {
+		t.Fatalf("low = %s", calls[2])
+	}
+	if !strings.Contains(calls[3], `"priority-normal":[3]`) {
+		t.Fatalf("normal = %s", calls[3])
 	}
 }
 

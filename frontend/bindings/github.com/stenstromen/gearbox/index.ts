@@ -14,6 +14,7 @@ export type {
     SettingsInput,
     Torrent,
     TorrentFile,
+    TorrentFilesUpdate,
     TorrentInfo,
     Tracker,
     UpdateNotice

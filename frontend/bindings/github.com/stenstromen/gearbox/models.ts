@@ -77,11 +77,31 @@ export interface Torrent {
 /**
  * TorrentFile is one file inside a torrent.
  * Name is the path relative to the torrent, with "/" between folders.
+ * Index is that file's position in the torrent; torrent-set uses it.
+ * Priority is -1 for low, 0 for normal, and 1 for high.
+ * Wanted is false when the file is skipped.
  */
 export interface TorrentFile {
+    "index": number;
     "name": string;
     "size": number;
     "have": number;
+    "wanted": boolean;
+    "priority": number;
+}
+
+/**
+ * TorrentFilesUpdate changes which files a torrent downloads and how soon.
+ * Indices are positions in the torrent's file list. A folder is every file inside it.
+ * When SetWanted is true, Wanted downloads or skips those files.
+ * When SetPriority is true, Priority is "low", "normal", or "high".
+ */
+export interface TorrentFilesUpdate {
+    "indices": number[] | null;
+    "setWanted": boolean;
+    "wanted": boolean;
+    "setPriority": boolean;
+    "priority": string;
 }
 
 /**

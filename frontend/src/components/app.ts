@@ -1,6 +1,7 @@
 import {Browser, Events} from "@wailsio/runtime";
 import {TransmissionService, type Torrent, type TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {formatRate} from "../format";
+import {applyFileUpdate, type FileUpdate} from "../files";
 import {emptySelection, sameIds, selectionFromArrow, selectionFromClick, selectionFromContext, selectionFromSelectAll, type RowSelection} from "../selection";
 import {decodeSort, filterByName, filterByStatus, isStoppedStatus, sortTorrents, type SortKey, type StatusFilter} from "../sort";
 import {openAddDialog, openRemoveDialog} from "./add-dialog";
@@ -211,6 +212,7 @@ export function mountApp(root: HTMLElement): void {
     let inspectorError = "";
     let inspectorLoading = false;
     let inspectorGeneration = 0;
+    let fileUpdateGeneration = 0;
 
     const visibleTorrents = () => sortTorrents(filterByStatus(filterByName(torrents, nameQuery), statusFilter), sortKey, sortReversed);
 
@@ -270,7 +272,9 @@ export function mountApp(root: HTMLElement): void {
         }, (tab) => {
             inspectorTab = tab;
             paintInspector(false);
-        }, closeInspector);
+        }, closeInspector, (update) => {
+            void updateTorrentFiles(update);
+        });
         if (scroll > 0) {
             const body = inspectorContent.querySelector(".inspector-body");
             if (body) {
@@ -407,6 +411,48 @@ export function mountApp(root: HTMLElement): void {
             return;
         }
         showInspector();
+    };
+
+    const updateTorrentFiles = async (update: FileUpdate) => {
+        const info = torrentInfo;
+        if (!info?.files || update.indices.length === 0) {
+            return;
+        }
+        const generation = ++fileUpdateGeneration;
+        const previous = info.files;
+        info.files = applyFileUpdate(previous, update);
+        paintInspector(true);
+        try {
+            await TransmissionService.SetTorrentFiles(info.id, {
+                indices: [...update.indices],
+                setWanted: update.wanted !== undefined,
+                wanted: update.wanted === true,
+                setPriority: update.priority !== undefined,
+                priority: update.priority ?? "",
+            });
+            if (generation !== fileUpdateGeneration || torrentInfo?.id !== info.id) {
+                return;
+            }
+            notice.hidden = true;
+            notice.textContent = "";
+            void loadInspector();
+        } catch (err) {
+            if (generation !== fileUpdateGeneration) {
+                return;
+            }
+            if (torrentInfo === info) {
+                info.files = previous;
+                paintInspector(true);
+            }
+            if (isUnavailable(err)) {
+                notice.hidden = true;
+                notice.textContent = "";
+                failConnection();
+                return;
+            }
+            notice.hidden = false;
+            notice.textContent = errorMessage(err);
+        }
     };
 
     const loadInspector = async () => {

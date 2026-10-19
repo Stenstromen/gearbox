@@ -1,5 +1,6 @@
 import type {Peer, TorrentFile, Tracker, TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {mountColumnResize, pxFromRem, unmountColumnResize, type ColumnSpec} from "../column-resize";
+import {fileIndices, fileSummary, fileTree, priorityState, sortFileNodes, wantedState, type FileNode, type FilePriority, type FileSortKey, type FileUpdate} from "../files";
 import {formatBytes, formatPercent, formatRate} from "../format";
 import {mixedLabel, torrentInfoFields} from "../inspector-info";
 
@@ -20,11 +21,11 @@ export type InspectorState = {
     infos: readonly TorrentInfo[];
 };
 
-export function renderInspector(host: HTMLElement, state: InspectorState, onTab: (tab: InspectorTab) => void, onClose: () => void): void {
+export function renderInspector(host: HTMLElement, state: InspectorState, onTab: (tab: InspectorTab) => void, onClose: () => void, onFiles: (update: FileUpdate) => void): void {
     unmountColumnResize("peers");
     unmountColumnResize("files");
     host.replaceChildren();
-    const body = panelBody(state);
+    const body = panelBody(state, onFiles);
     host.append(tabBar(state.tab, onTab, onClose), body);
     const table = body.querySelector("table");
     if (!(table instanceof HTMLTableElement) || !host.isConnected) {
@@ -75,7 +76,7 @@ function tabBar(active: InspectorTab, onTab: (tab: InspectorTab) => void, onClos
     return bar;
 }
 
-function panelBody(state: InspectorState): HTMLElement {
+function panelBody(state: InspectorState, onFiles: (update: FileUpdate) => void): HTMLElement {
     const body = document.createElement("div");
     body.className = "inspector-body";
     body.id = `inspector-panel-${state.tab}`;
@@ -106,7 +107,7 @@ function panelBody(state: InspectorState): HTMLElement {
     }
     if (state.tab === "files") {
         body.classList.add("inspector-body-flush");
-        body.append(fileTable(state.info.files ?? [], state.info.id));
+        body.append(fileTable(state.info.files ?? [], state.info.id, onFiles));
     }
     return body;
 }
@@ -469,13 +470,6 @@ function swarmCount(value: number): string {
     return value < 0 ? "N/A" : String(value);
 }
 
-type FileNode = {
-    name: string;
-    size: number;
-    have: number;
-    children: FileNode[];
-};
-
 let collapsedTorrent = 0;
 const collapsedPaths = new Set<string>();
 
@@ -488,19 +482,19 @@ function collapsedFor(torrentId: number): Set<string> {
 }
 
 const fileColumns = [
+    {id: "download", label: "Download", minRem: 2.75, defaultRem: 3.25},
     {id: "name", label: "Name", minRem: 8, defaultRem: 16, flex: true, direction: "asc"},
+    {id: "priority", label: "Priority", minRem: 6.75, defaultRem: 8.25, direction: "desc"},
     {id: "size", label: "Size", minRem: 4.5, defaultRem: 6.5, direction: "desc"},
     {id: "downloaded", label: "Downloaded", minRem: 6, defaultRem: 9.5, direction: "desc"},
     {id: "percent", label: "%", minRem: 5.75, defaultRem: 6.25, direction: "desc"},
 ] as const;
 
-type FileSortKey = (typeof fileColumns)[number]["id"];
-
 let fileSortTorrent = 0;
 let fileSortKey: FileSortKey | null = null;
 let fileSortDirection: "asc" | "desc" = "asc";
 
-function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElement {
+function fileTable(files: readonly TorrentFile[], torrentId: number, onUpdate: (update: FileUpdate) => void): HTMLElement {
     if (files.length === 0) {
         const empty = document.createElement("p");
         empty.className = "inspector-message";
@@ -517,30 +511,46 @@ function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElemen
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
     const headers = new Map<FileSortKey, HTMLTableCellElement>();
+    const nodes = fileTree(files);
     for (const column of fileColumns) {
         const cell = document.createElement("th");
         cell.scope = "col";
-        if (!("flex" in column)) {
+        if (column.id === "download") {
+            cell.className = "file-download";
+            cell.append(downloadCheck("all files", wantedState(fileSummary(nodes)), (wanted) => {
+                onUpdate({indices: nodes.flatMap((node) => fileIndices(node)), wanted});
+            }));
+            headRow.append(cell);
+            continue;
+        }
+        if (column.id === "size" || column.id === "downloaded" || column.id === "percent") {
             cell.className = "num";
         }
-        cell.append(sortButton(column.label, () => {
-            if (fileSortKey === column.id) {
+        if (!("direction" in column)) {
+            headRow.append(cell);
+            continue;
+        }
+        const sortable = column;
+        cell.append(sortButton(sortable.label, () => {
+            if (fileSortKey === sortable.id) {
                 fileSortDirection = fileSortDirection === "asc" ? "desc" : "asc";
             } else {
-                fileSortKey = column.id;
-                fileSortDirection = column.direction;
+                fileSortKey = sortable.id;
+                fileSortDirection = sortable.direction;
             }
             paint();
         }));
-        headers.set(column.id, cell);
+        headers.set(sortable.id, cell);
         headRow.append(cell);
     }
     head.append(headRow);
     const body = document.createElement("tbody");
-    const nodes = fileTree(files);
     const collapsed = collapsedFor(torrentId);
     const paint = () => {
         for (const column of fileColumns) {
+            if (!("direction" in column)) {
+                continue;
+            }
             const cell = headers.get(column.id);
             if (!cell) {
                 continue;
@@ -554,9 +564,9 @@ function fileTable(files: readonly TorrentFile[], torrentId: number): HTMLElemen
                     : `Sort by ${column.label}`);
             }
         }
-        sortFileNodes(nodes);
+        sortFileNodes(nodes, fileSortKey, fileSortDirection);
         body.replaceChildren();
-        appendFileNodes(body, nodes, 0, "", collapsed, paint);
+        appendFileNodes(body, nodes, 0, "", collapsed, paint, onUpdate);
     };
     paint();
     table.append(head, body);
@@ -588,7 +598,7 @@ function sortButton(label: string, onClick: () => void): HTMLButtonElement {
     return button;
 }
 
-function appendFileNodes(body: HTMLElement, nodes: readonly FileNode[], depth: number, parentPath: string, collapsed: Set<string>, paint: () => void): void {
+function appendFileNodes(body: HTMLElement, nodes: readonly FileNode[], depth: number, parentPath: string, collapsed: Set<string>, paint: () => void, onUpdate: (update: FileUpdate) => void): void {
     for (const node of nodes) {
         const path = parentPath ? `${parentPath}/${node.name}` : node.name;
         const folder = node.children.length > 0;
@@ -600,19 +610,30 @@ function appendFileNodes(body: HTMLElement, nodes: readonly FileNode[], depth: n
                 collapsed.add(path);
             }
             paint();
-        }));
+        }, onUpdate));
         if (open) {
-            appendFileNodes(body, node.children, depth + 1, path, collapsed, paint);
+            appendFileNodes(body, node.children, depth + 1, path, collapsed, paint, onUpdate);
         }
     }
 }
 
-function fileRow(node: FileNode, depth: number, folder: boolean, open: boolean, onToggle: () => void): HTMLTableRowElement {
+function fileRow(node: FileNode, depth: number, folder: boolean, open: boolean, onToggle: () => void, onUpdate: (update: FileUpdate) => void): HTMLTableRowElement {
     const row = document.createElement("tr");
+    const classes: string[] = [];
     if (folder) {
-        row.className = "is-folder";
+        classes.push("is-folder");
         row.addEventListener("click", onToggle);
     }
+    if (wantedState(node) === "none") {
+        classes.push("is-skipped");
+    }
+    row.className = classes.join(" ");
+    const download = document.createElement("td");
+    download.className = "file-download";
+    download.append(downloadCheck(node.name, wantedState(node), (wanted) => {
+        onUpdate({indices: fileIndices(node), wanted});
+    }));
+    download.addEventListener("click", (event) => event.stopPropagation());
     const name = document.createElement("td");
     name.className = "file-name";
     const label = document.createElement("div");
@@ -645,9 +666,62 @@ function fileRow(node: FileNode, depth: number, folder: boolean, open: boolean, 
     text.title = node.name;
     label.append(text);
     name.append(label);
+    const priority = document.createElement("td");
+    priority.className = "file-priority";
+    priority.append(prioritySelect(node.name, priorityState(node), (value) => {
+        onUpdate({indices: fileIndices(node), priority: value});
+    }));
+    priority.addEventListener("click", (event) => event.stopPropagation());
     const fraction = node.size > 0 ? node.have / node.size : 0;
-    row.append(name, fileStat(formatBytes(node.size)), fileStat(formatBytes(node.have)), fileStat(formatPercent(fraction)));
+    row.append(download, name, priority, fileStat(formatBytes(node.size)), fileStat(formatBytes(node.have)), fileStat(formatPercent(fraction)));
     return row;
+}
+
+function downloadCheck(name: string, state: ReturnType<typeof wantedState>, onChange: (wanted: boolean) => void): HTMLInputElement {
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "file-check";
+    input.checked = state === "all";
+    input.indeterminate = state === "mixed";
+    input.setAttribute("aria-label", `Download ${name}`);
+    input.title = state === "none" ? "Skipped" : state === "mixed" ? "Some files skipped" : "Download";
+    input.addEventListener("click", (event) => event.stopPropagation());
+    input.addEventListener("change", () => onChange(state !== "all"));
+    return input;
+}
+
+function prioritySelect(name: string, state: ReturnType<typeof priorityState>, onChange: (priority: FilePriority) => void): HTMLSelectElement {
+    const select = document.createElement("select");
+    select.className = state === "mixed" ? "file-priority-select is-mixed" : "file-priority-select";
+    select.setAttribute("aria-label", `Priority for ${name}`);
+    if (state === "mixed") {
+        select.title = "Mixed priority";
+        const mixed = document.createElement("option");
+        mixed.value = "mixed";
+        mixed.textContent = "Mixed";
+        mixed.disabled = true;
+        select.append(mixed);
+    }
+    for (const option of [
+        ["low", "Low"],
+        ["normal", "Normal"],
+        ["high", "High"],
+    ] as const) {
+        const item = document.createElement("option");
+        item.value = option[0];
+        item.textContent = option[1];
+        select.append(item);
+    }
+    select.value = state;
+    select.addEventListener("click", (event) => event.stopPropagation());
+    select.addEventListener("mousedown", (event) => event.stopPropagation());
+    select.addEventListener("change", () => {
+        const value = select.value;
+        if (value === "low" || value === "normal" || value === "high") {
+            onChange(value);
+        }
+    });
+    return select;
 }
 
 function fileStat(value: string): HTMLTableCellElement {
@@ -655,93 +729,6 @@ function fileStat(value: string): HTMLTableCellElement {
     cell.className = "num";
     cell.textContent = value;
     return cell;
-}
-
-function fileTree(files: readonly TorrentFile[]): FileNode[] {
-    const roots: FileNode[] = [];
-    const byPath = new Map<string, FileNode>();
-    const ensureFolder = (parts: readonly string[]): FileNode[] => {
-        let list = roots;
-        let key = "";
-        for (const part of parts) {
-            key = key ? `${key}/${part}` : part;
-            let folder = byPath.get(key);
-            if (!folder) {
-                folder = {name: part, size: 0, have: 0, children: []};
-                byPath.set(key, folder);
-                list.push(folder);
-            }
-            list = folder.children;
-        }
-        return list;
-    };
-    for (const file of files) {
-        const parts = file.name.split("/").filter((part) => part !== "");
-        if (parts.length === 0) {
-            continue;
-        }
-        const parent = ensureFolder(parts.slice(0, -1));
-        const key = parts.join("/");
-        const existing = byPath.get(key);
-        if (existing) {
-            existing.size = file.size;
-            existing.have = file.have;
-            continue;
-        }
-        const leaf: FileNode = {name: parts[parts.length - 1], size: file.size, have: file.have, children: []};
-        byPath.set(key, leaf);
-        parent.push(leaf);
-    }
-    rollupFiles(roots);
-    return roots;
-}
-
-function rollupFiles(nodes: FileNode[]): {size: number; have: number} {
-    let size = 0;
-    let have = 0;
-    for (const node of nodes) {
-        if (node.children.length > 0) {
-            const totals = rollupFiles(node.children);
-            node.size += totals.size;
-            node.have += totals.have;
-        }
-        size += node.size;
-        have += node.have;
-    }
-    return {size, have};
-}
-
-function sortFileNodes(nodes: FileNode[]): void {
-    nodes.sort((a, b) => compareFileNodes(a, b, fileSortKey, fileSortDirection));
-    for (const node of nodes) {
-        sortFileNodes(node.children);
-    }
-}
-
-function compareFileNodes(a: FileNode, b: FileNode, key: FileSortKey | null, direction: "asc" | "desc"): number {
-    const folderDelta = Number(b.children.length > 0) - Number(a.children.length > 0);
-    if (key === null || key === "name") {
-        if (folderDelta !== 0) {
-            return folderDelta;
-        }
-        return comparePeerText(a.name, b.name, key === null ? "asc" : direction);
-    }
-    const primary = key === "size"
-        ? comparePeerNumber(a.size, b.size, direction)
-        : key === "downloaded"
-            ? comparePeerNumber(a.have, b.have, direction)
-            : comparePeerNumber(fileFraction(a), fileFraction(b), direction);
-    if (primary !== 0) {
-        return primary;
-    }
-    if (folderDelta !== 0) {
-        return folderDelta;
-    }
-    return comparePeerText(a.name, b.name);
-}
-
-function fileFraction(node: FileNode): number {
-    return node.size > 0 ? node.have / node.size : 0;
 }
 
 function svgPath(d: string): SVGPathElement {

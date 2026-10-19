@@ -272,10 +272,28 @@ type TorrentInfo struct {
 
 // TorrentFile is one file inside a torrent.
 // Name is the path relative to the torrent, with "/" between folders.
+// Index is that file's position in the torrent; torrent-set uses it.
+// Priority is -1 for low, 0 for normal, and 1 for high.
+// Wanted is false when the file is skipped.
 type TorrentFile struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	Have int64  `json:"have"`
+	Index    int    `json:"index"`
+	Name     string `json:"name"`
+	Size     int64  `json:"size"`
+	Have     int64  `json:"have"`
+	Wanted   bool   `json:"wanted"`
+	Priority int    `json:"priority"`
+}
+
+// TorrentFilesUpdate changes which files a torrent downloads and how soon.
+// Indices are positions in the torrent's file list. A folder is every file inside it.
+// When SetWanted is true, Wanted downloads or skips those files.
+// When SetPriority is true, Priority is "low", "normal", or "high".
+type TorrentFilesUpdate struct {
+	Indices     []int  `json:"indices"`
+	SetWanted   bool   `json:"setWanted"`
+	Wanted      bool   `json:"wanted"`
+	SetPriority bool   `json:"setPriority"`
+	Priority    string `json:"priority"`
 }
 
 // Tracker is one announce URL and its latest announce and scrape result.
@@ -395,6 +413,15 @@ func (s *TransmissionService) RemoveTorrent(ctx context.Context, id int, deleteD
 		return err
 	}
 	return client.RemoveTorrent(ctx, id, deleteData)
+}
+
+// SetTorrentFiles downloads, skips, or reprioritizes files in one torrent.
+func (s *TransmissionService) SetTorrentFiles(ctx context.Context, id int, update TorrentFilesUpdate) error {
+	client, err := s.rpc()
+	if err != nil {
+		return err
+	}
+	return client.SetTorrentFiles(ctx, id, update)
 }
 
 // Client talks to Transmission's classic JSON-RPC endpoint.
@@ -556,6 +583,8 @@ type rpcFile struct {
 
 type rpcFileStat struct {
 	BytesCompleted int64 `json:"bytesCompleted"`
+	Wanted         *bool `json:"wanted"`
+	Priority       *int  `json:"priority"`
 }
 
 type rpcTracker struct {
@@ -666,13 +695,24 @@ func mapFiles(files []rpcFile, stats []rpcFileStat) []TorrentFile {
 	mapped := make([]TorrentFile, 0, len(files))
 	for i, file := range files {
 		have := file.BytesCompleted
+		wanted := true
+		priority := 0
 		if i < len(stats) {
 			have = stats[i].BytesCompleted
+			if stats[i].Wanted != nil {
+				wanted = *stats[i].Wanted
+			}
+			if stats[i].Priority != nil {
+				priority = *stats[i].Priority
+			}
 		}
 		mapped = append(mapped, TorrentFile{
-			Name: file.Name,
-			Size: file.Length,
-			Have: have,
+			Index:    i,
+			Name:     file.Name,
+			Size:     file.Length,
+			Have:     have,
+			Wanted:   wanted,
+			Priority: priority,
 		})
 	}
 	return mapped
@@ -858,6 +898,70 @@ func (c *Client) RemoveTorrent(ctx context.Context, id int, deleteData bool) err
 		"ids":               []int{id},
 		"delete-local-data": deleteData,
 	}, nil)
+}
+
+// SetTorrentFiles selects, skips, or reprioritizes files.
+// Transmission applies one priority list and one wanted list per call.
+func (c *Client) SetTorrentFiles(ctx context.Context, id int, update TorrentFilesUpdate) error {
+	if !update.SetWanted && !update.SetPriority {
+		return fmt.Errorf("choose download or priority")
+	}
+	var priorityKey string
+	if update.SetPriority {
+		var err error
+		priorityKey, err = priorityArgument(update.Priority)
+		if err != nil {
+			return err
+		}
+	}
+	indices, err := normalizeFileIndices(update.Indices)
+	if err != nil {
+		return err
+	}
+	args := map[string]any{"ids": []int{id}}
+	if update.SetWanted {
+		key := "files-unwanted"
+		if update.Wanted {
+			key = "files-wanted"
+		}
+		args[key] = indices
+	}
+	if update.SetPriority {
+		args[priorityKey] = indices
+	}
+	return c.call(ctx, "torrent-set", args, nil)
+}
+
+func normalizeFileIndices(indices []int) ([]int, error) {
+	if len(indices) == 0 {
+		return nil, fmt.Errorf("choose a file")
+	}
+	seen := make(map[int]struct{}, len(indices))
+	out := make([]int, 0, len(indices))
+	for _, index := range indices {
+		if index < 0 {
+			return nil, fmt.Errorf("unknown file")
+		}
+		if _, ok := seen[index]; ok {
+			continue
+		}
+		seen[index] = struct{}{}
+		out = append(out, index)
+	}
+	return out, nil
+}
+
+func priorityArgument(priority string) (string, error) {
+	switch strings.TrimSpace(priority) {
+	case "low":
+		return "priority-low", nil
+	case "normal":
+		return "priority-normal", nil
+	case "high":
+		return "priority-high", nil
+	default:
+		return "", fmt.Errorf("choose low, normal, or high priority")
+	}
 }
 
 func (c *Client) call(ctx context.Context, method string, args any, out any) error {
