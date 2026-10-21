@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/dock"
 )
 
 //go:embed all:frontend/dist
@@ -14,6 +15,7 @@ var assets embed.FS
 
 func main() {
 	service := NewTransmissionService()
+	service.setDock(dock.New())
 	app := application.New(application.Options{
 		Name:        "Gearbox",
 		Description: "View a remote Transmission daemon",

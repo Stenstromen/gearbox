@@ -74,6 +74,11 @@ type TransmissionService struct {
 	store     *config.Store
 	err       error
 	openError string
+
+	badgeMu      sync.Mutex
+	badge        dockBadge
+	badgeErr     string
+	badgeApplied *int
 }
 
 // NewTransmissionService loads saved preferences, falling back to the environment
@@ -241,9 +246,16 @@ func (s *TransmissionService) rpc() (*Client, error) {
 func (s *TransmissionService) ListTorrents(ctx context.Context) ([]Torrent, error) {
 	client, err := s.rpc()
 	if err != nil {
+		s.syncDownloadBadge(0)
 		return nil, err
 	}
-	return client.ListTorrents(ctx)
+	torrents, err := client.ListTorrents(ctx)
+	if err != nil {
+		s.syncDownloadBadge(0)
+		return nil, err
+	}
+	s.syncDownloadBadge(activeDownloads(torrents))
+	return torrents, nil
 }
 
 // TorrentInfo is the inspector snapshot for one torrent.
