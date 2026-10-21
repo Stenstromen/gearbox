@@ -868,6 +868,53 @@ body.is-resizing {
     user-select: text;
 }
 
+.info-copy {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: baseline;
+}
+
+.info-copy-value {
+    min-width: 0;
+    word-break: break-all;
+}
+
+.info-copy-button {
+    margin: 0;
+    padding: 0 7px;
+    border: 1px solid #3c4452;
+    border-radius: 6px;
+    background: #242830;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 11px;
+    line-height: 16px;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+}
+
+.info-copy-button:hover:not(:disabled) {
+    color: var(--text);
+    border-color: #5c6574;
+}
+
+.info-copy-button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.info-copy-button.is-copied {
+    color: var(--down);
+    border-color: #3d5c49;
+}
+
+.info-copy-button.is-failed {
+    color: var(--danger);
+    border-color: #6e3a34;
+}
+
 .info-error { color: var(--danger); }
 
 .modal-backdrop {

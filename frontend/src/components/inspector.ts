@@ -1,8 +1,9 @@
+import {Clipboard} from "@wailsio/runtime";
 import type {Peer, TorrentFile, Tracker, TorrentInfo} from "../../bindings/github.com/stenstromen/gearbox";
 import {mountColumnResize, pxFromRem, unmountColumnResize, type ColumnSpec} from "../column-resize";
 import {fileIndices, fileSummary, fileTree, priorityState, sortFileNodes, wantedState, type FileNode, type FilePriority, type FileSortKey, type FileUpdate} from "../files";
 import {formatBytes, formatPercent, formatRate} from "../format";
-import {mixedLabel, torrentInfoFields} from "../inspector-info";
+import {copyableInfoValue, mixedLabel, torrentInfoFields} from "../inspector-info";
 
 export const inspectorTabs = [
     {id: "info", label: "Info"},
@@ -44,7 +45,17 @@ export function fillTorrentInfo(host: HTMLElement, infos: readonly TorrentInfo[]
         if (!node) {
             continue;
         }
-        node.textContent = value;
+        const text = node.querySelector(":scope > .info-copy-value");
+        if (text instanceof HTMLElement) {
+            text.textContent = value;
+            text.title = value;
+            const button = node.querySelector(":scope > .info-copy-button");
+            if (button instanceof HTMLButtonElement) {
+                syncCopyButton(button, value);
+            }
+        } else {
+            node.textContent = value;
+        }
         node.classList.toggle("info-error", field === "error" && value !== "None" && value !== mixedLabel);
     }
 }
@@ -157,15 +168,125 @@ function infoSection(title: string, rows: readonly (readonly [string, string])[]
     for (const [field, label] of rows) {
         const term = document.createElement("dt");
         term.textContent = label;
-        const value = document.createElement("dd");
-        value.dataset.field = field;
-        if (field === "hash" || field === "magnet") {
-            value.className = "info-mono";
-        }
-        list.append(term, value);
+        list.append(term, infoValue(field));
     }
     section.append(heading, list);
     return section;
+}
+
+const copyActions: Record<string, string> = {
+    hash: "Copy hash",
+    magnet: "Copy magnet link",
+};
+
+const copyReset = new WeakMap<HTMLButtonElement, number>();
+
+function infoValue(field: string): HTMLElement {
+    const value = document.createElement("dd");
+    value.dataset.field = field;
+    if (field !== "hash" && field !== "magnet") {
+        return value;
+    }
+    value.className = "info-copy";
+    const text = document.createElement("span");
+    text.className = "info-mono info-copy-value";
+    value.append(copyButton(field), text);
+    return value;
+}
+
+function copyButton(field: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "info-copy-button";
+    button.dataset.copyField = field;
+    button.dataset.copyAction = copyActions[field] ?? "Copy";
+    button.hidden = true;
+    resetCopyButton(button);
+    button.addEventListener("click", () => {
+        const text = button.dataset.copy ?? "";
+        if (text === "") {
+            return;
+        }
+        void copyToClipboard(text).then((ok) => {
+            if (!button.isConnected || button.dataset.copy !== text) {
+                return;
+            }
+            if (ok) {
+                showCopyResult(button, "Copied", "is-copied");
+                return;
+            }
+            showCopyResult(button, "Failed", "is-failed");
+        });
+    });
+    return button;
+}
+
+function syncCopyButton(button: HTMLButtonElement, value: string): void {
+    const copy = copyableInfoValue(value);
+    const changed = (button.dataset.copy ?? "") !== copy;
+    button.dataset.copy = copy;
+    button.hidden = copy === "";
+    button.disabled = copy === "";
+    if (copy === "" || changed) {
+        resetCopyButton(button);
+    }
+}
+
+function showCopyResult(button: HTMLButtonElement, label: string, className: "is-copied" | "is-failed"): void {
+    button.textContent = label;
+    button.classList.remove("is-copied", "is-failed");
+    button.classList.add(className);
+    const announced = copyResultLabel(button, className === "is-copied");
+    button.setAttribute("aria-label", announced);
+    button.title = announced;
+    const existing = copyReset.get(button);
+    if (existing !== undefined) {
+        window.clearTimeout(existing);
+    }
+    copyReset.set(button, window.setTimeout(() => {
+        copyReset.delete(button);
+        if (button.isConnected) {
+            resetCopyButton(button);
+        }
+    }, 1600));
+}
+
+function copyResultLabel(button: HTMLButtonElement, copied: boolean): string {
+    if (button.dataset.copyField === "magnet") {
+        return copied ? "Magnet link copied" : "Could not copy magnet link";
+    }
+    return copied ? "Hash copied" : "Could not copy hash";
+}
+
+function resetCopyButton(button: HTMLButtonElement): void {
+    const existing = copyReset.get(button);
+    if (existing !== undefined) {
+        window.clearTimeout(existing);
+        copyReset.delete(button);
+    }
+    const action = button.dataset.copyAction ?? "Copy";
+    button.textContent = "Copy";
+    button.classList.remove("is-copied", "is-failed");
+    button.setAttribute("aria-label", action);
+    button.title = action;
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+    try {
+        await Clipboard.SetText(text);
+        return true;
+    } catch {
+        // A browser preview has no native pasteboard.
+    }
+    if (!navigator.clipboard?.writeText) {
+        return false;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 const peerColumns = [

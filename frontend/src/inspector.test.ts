@@ -1,5 +1,5 @@
 import type {TorrentInfo} from "../bindings/github.com/stenstromen/gearbox/index.ts";
-import {mixedLabel, torrentInfoFields} from "./inspector-info.ts";
+import {copyableInfoValue, mixedLabel, torrentInfoFields} from "./inspector-info.ts";
 import {formatBytes, formatPercent, formatRatio} from "./format.ts";
 
 function assert(condition: boolean, message: string): void {
@@ -43,6 +43,10 @@ assert(aloneFields.name === "Gamma", `single name, got ${aloneFields.name}`);
 assert(aloneFields.uploaded === `${formatBytes(3000)} (ratio ${formatRatio(3)})`, `single upload, got ${aloneFields.uploaded}`);
 assert(aloneFields.downloaded === formatBytes(1024), `single download, got ${aloneFields.downloaded}`);
 assert(aloneFields.size === `${formatBytes(4096)} (4 pieces of ${formatBytes(1024)})`, `single size, got ${aloneFields.size}`);
+assert(copyableInfoValue(aloneFields.hash) === "abc", `single hash copy, got ${copyableInfoValue(aloneFields.hash)}`);
+assert(copyableInfoValue(aloneFields.magnet) === "magnet:?xt=urn:btih:abc", `single magnet copy, got ${copyableInfoValue(aloneFields.magnet)}`);
+assert(copyableInfoValue("—") === "", "empty placeholder is not copyable");
+assert(copyableInfoValue(mixedLabel) === "", "mixed placeholder is not copyable");
 
 const alpha = torrent({
     id: 1,
@@ -86,6 +90,8 @@ assert(mixed.hash === mixedLabel, `mixed hash, got ${mixed.hash}`);
 assert(mixed.state === mixedLabel, `mixed state, got ${mixed.state}`);
 assert(mixed.location === "/downloads", `shared location, got ${mixed.location}`);
 assert(mixed.magnet === mixedLabel, `mixed magnet, got ${mixed.magnet}`);
+assert(copyableInfoValue(mixed.hash) === "", `mixed hash should not copy, got ${copyableInfoValue(mixed.hash)}`);
+assert(copyableInfoValue(mixed.magnet) === "", `mixed magnet should not copy, got ${copyableInfoValue(mixed.magnet)}`);
 assert(mixed.have === `${formatBytes(6144)} (${formatPercent((4096 + 2048) / 8192)})`, `mixed have, got ${mixed.have}`);
 
 const samePieces = torrentInfoFields([
@@ -99,5 +105,13 @@ const onePiece = torrentInfoFields([
     torrent({id: 6, pieceCount: 0, pieceSize: 4096, totalSize: 0, hashString: "other"}),
 ]);
 assert(onePiece.size === `${formatBytes(1024)} (1 piece)`, `singular pieces, got ${onePiece.size}`);
+
+const sharedHash = torrentInfoFields([
+    torrent({id: 7, hashString: "same", magnetLink: "magnet:?xt=urn:btih:same"}),
+    torrent({id: 8, hashString: "same", magnetLink: "magnet:?xt=urn:btih:same-other"}),
+]);
+assert(sharedHash.hash === "same", `shared hash, got ${sharedHash.hash}`);
+assert(copyableInfoValue(sharedHash.hash) === "same", `shared hash copy, got ${copyableInfoValue(sharedHash.hash)}`);
+assert(sharedHash.magnet === mixedLabel, `different magnets stay mixed, got ${sharedHash.magnet}`);
 
 console.log("inspector tests passed");

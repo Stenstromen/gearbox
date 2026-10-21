@@ -3,6 +3,15 @@ import {formatAvailability, formatBytes, formatDuration, formatLastActivity, for
 
 export const mixedLabel = "Mixed";
 
+const emptyLabel = "—";
+
+export function copyableInfoValue(value: string): string {
+    if (value === "" || value === emptyLabel || value === mixedLabel) {
+        return "";
+    }
+    return value;
+}
+
 export function torrentInfoFields(infos: readonly TorrentInfo[]): Record<string, string> {
     if (infos.length === 1) {
         const [info] = infos;
@@ -29,10 +38,10 @@ function singleTorrentFields(info: TorrentInfo): Record<string, string> {
         error: info.error.trim() || "None",
         name: info.name || "Untitled",
         size: sizeField(info.totalSize, info.pieceCount, info.pieceSize),
-        location: info.downloadDir || "—",
-        hash: info.hashString || "—",
+        location: info.downloadDir || emptyLabel,
+        hash: info.hashString || emptyLabel,
         added: formatTimestamp(info.addedDate),
-        magnet: info.magnetLink || "—",
+        magnet: info.magnetLink || emptyLabel,
     };
 }
 
@@ -59,8 +68,8 @@ function mixedTorrentFields(infos: readonly TorrentInfo[]): Record<string, strin
         error: error === undefined ? mixedLabel : (error || "None"),
         name: mixedLabel,
         size: sizeField(sumBy(infos, (info) => info.totalSize), sumBy(infos, (info) => info.pieceCount), pieceSize === undefined ? null : pieceSize),
-        location: location === undefined ? mixedLabel : (location || "—"),
-        hash: hash === undefined ? mixedLabel : (hash || "—"),
+        location: location === undefined ? mixedLabel : (location || emptyLabel),
+        hash: hash === undefined ? mixedLabel : (hash || emptyLabel),
         added: added === undefined ? mixedLabel : formatTimestamp(added),
         magnet: mixedLabel,
     };
