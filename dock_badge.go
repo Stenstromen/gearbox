@@ -26,6 +26,7 @@ func (s *TransmissionService) setDock(badge dockBadge) {
 
 // ServiceStartup keeps the Dock badge current while the app is running,
 // including when the window is hidden and the list is not refreshing.
+// Notification permission is requested from Preferences, not at launch.
 func (s *TransmissionService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.badgeMu.Lock()
 	enabled := s.badge != nil
@@ -63,7 +64,13 @@ func (s *TransmissionService) refreshDownloadBadge(ctx context.Context) {
 		s.syncDownloadBadge(0)
 		return
 	}
+	s.observeTorrents(torrents)
+}
+
+// observeTorrents updates the Dock badge and notifies when a download finishes.
+func (s *TransmissionService) observeTorrents(torrents []Torrent) {
 	s.syncDownloadBadge(activeDownloads(torrents))
+	s.noteFinishedDownloads(torrents)
 }
 
 func (s *TransmissionService) refreshInterval() time.Duration {

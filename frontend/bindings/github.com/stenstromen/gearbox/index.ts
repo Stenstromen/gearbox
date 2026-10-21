@@ -9,6 +9,7 @@ export {
 export type {
     AddTorrentRequest,
     DownloadLocation,
+    NotificationPermission,
     Peer,
     Settings,
     SettingsInput,

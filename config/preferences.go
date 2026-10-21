@@ -18,11 +18,18 @@ type Preferences struct {
 	RefreshSeconds int    `json:"refreshSeconds"`
 	Sort           string `json:"sort"`
 	CheckUpdates   bool   `json:"checkUpdates"`
+	// NotifyOnFinish asks macOS to alert when a download finishes.
+	NotifyOnFinish bool `json:"notifyOnFinish"`
 }
 
 // DefaultPreferences is used for a new install and for missing fields.
 func DefaultPreferences() Preferences {
-	return Preferences{RefreshSeconds: defaultRefreshSeconds, Sort: defaultSort, CheckUpdates: true}
+	return Preferences{
+		RefreshSeconds: defaultRefreshSeconds,
+		Sort:           defaultSort,
+		CheckUpdates:   true,
+		NotifyOnFinish: true,
+	}
 }
 
 // Normalize trims text fields and keeps the refresh interval and sort in range.

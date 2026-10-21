@@ -29,6 +29,7 @@ Watch downloads, add torrents, and start or stop them from a native app — with
 - **Inspector** — info, peers, trackers, and files for the selected torrent
 - **macOS Keychain** — store the RPC password securely; preferences on disk never contain the secret
 - **Auto-refresh** — poll the daemon on an interval you set (1–3600 seconds)
+- **Download notifications** — optional macOS alert when a download finishes, with permission and a test notification in Preferences
 - **Native menus** — Gearbox, File, Edit, View, and Window, plus a context menu on each row
 
 ## Installation

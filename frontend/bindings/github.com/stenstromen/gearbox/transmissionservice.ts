@@ -44,6 +44,13 @@ export function Endpoint(): $CancellablePromise<string> {
 }
 
 /**
+ * GetNotificationPermission returns the current notification authorization state.
+ */
+export function GetNotificationPermission(): $CancellablePromise<$models.NotificationPermission> {
+    return $Call.ByID(3291905255);
+}
+
+/**
  * GetSettings returns the preferences form values.
  */
 export function GetSettings(): $CancellablePromise<$models.Settings> {
@@ -80,11 +87,25 @@ export function RemoveTorrent(id: number, deleteData: boolean): $CancellableProm
 }
 
 /**
+ * RequestNotificationPermission prompts macOS for notification access.
+ */
+export function RequestNotificationPermission(): $CancellablePromise<$models.NotificationPermission> {
+    return $Call.ByID(3718232614);
+}
+
+/**
  * SaveSettings stores the connection settings and reconnects.
  * The password is written to the keychain and is not saved in the JSON file.
  */
 export function SaveSettings(input: $models.SettingsInput): $CancellablePromise<void> {
     return $Call.ByID(678405389, input);
+}
+
+/**
+ * SendTestNotification delivers a sample notification so permission can be verified.
+ */
+export function SendTestNotification(): $CancellablePromise<void> {
+    return $Call.ByID(2722053372);
 }
 
 /**

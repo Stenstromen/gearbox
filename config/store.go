@@ -24,14 +24,15 @@ type document struct {
 	Preferences *storedPreferences `json:"preferences"`
 }
 
-// storedPreferences keeps CheckUpdates optional so a file written before the
-// setting existed still checks for updates.
+// storedPreferences keeps CheckUpdates and NotifyOnFinish optional so a file
+// written before either setting existed still uses the default, which is on.
 type storedPreferences struct {
 	URL            string `json:"url"`
 	Username       string `json:"username"`
 	RefreshSeconds int    `json:"refreshSeconds"`
 	Sort           string `json:"sort"`
 	CheckUpdates   *bool  `json:"checkUpdates"`
+	NotifyOnFinish *bool  `json:"notifyOnFinish"`
 }
 
 // DefaultPath is ~/Library/Application Support/Gearbox/preferences.json.
@@ -96,12 +97,17 @@ func (stored storedPreferences) preferences() Preferences {
 	if stored.CheckUpdates != nil {
 		checkUpdates = *stored.CheckUpdates
 	}
+	notifyOnFinish := true
+	if stored.NotifyOnFinish != nil {
+		notifyOnFinish = *stored.NotifyOnFinish
+	}
 	return Preferences{
 		URL:            stored.URL,
 		Username:       stored.Username,
 		RefreshSeconds: stored.RefreshSeconds,
 		Sort:           stored.Sort,
 		CheckUpdates:   checkUpdates,
+		NotifyOnFinish: notifyOnFinish,
 	}.Normalize()
 }
 

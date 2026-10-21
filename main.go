@@ -8,6 +8,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 //go:embed all:frontend/dist
@@ -15,12 +16,15 @@ var assets embed.FS
 
 func main() {
 	service := NewTransmissionService()
+	notifier := notifications.New()
 	service.setDock(dock.New())
+	service.setNotifier(notifier)
 	app := application.New(application.Options{
 		Name:        "Gearbox",
 		Description: "View a remote Transmission daemon",
 		Services: []application.Service{
 			application.NewService(service),
+			application.NewService(notifier),
 		},
 		FileAssociations: []string{".torrent"},
 		Assets: application.AssetOptions{

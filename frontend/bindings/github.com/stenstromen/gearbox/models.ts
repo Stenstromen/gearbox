@@ -21,6 +21,15 @@ export interface DownloadLocation {
 }
 
 /**
+ * NotificationPermission describes macOS notification authorization state.
+ */
+export interface NotificationPermission {
+    "authorized": boolean;
+    "available": boolean;
+    "message": string;
+}
+
+/**
  * Peer is one connected peer on a torrent.
  */
 export interface Peer {
@@ -44,6 +53,7 @@ export interface Settings {
     "refreshSeconds": number;
     "sort": string;
     "checkUpdates": boolean;
+    "notifyOnFinish": boolean;
 }
 
 /**
@@ -56,6 +66,7 @@ export interface SettingsInput {
     "clearPassword": boolean;
     "refreshSeconds": number;
     "checkUpdates": boolean;
+    "notifyOnFinish": boolean;
 }
 
 /**

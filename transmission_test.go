@@ -401,6 +401,50 @@ func TestSaveSettingsVersionCheck(t *testing.T) {
 	}
 }
 
+func TestSaveSettingsNotifyOnFinish(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	store, err := config.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &TransmissionService{store: store}
+	settings, err := service.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.NotifyOnFinish {
+		t.Fatal("finish notifications defaulted off")
+	}
+	input := SettingsInput{
+		URL:            "http://127.0.0.1:9091/transmission/rpc",
+		Username:       "me",
+		RefreshSeconds: 9,
+		CheckUpdates:   true,
+		NotifyOnFinish: false,
+	}
+	if err := service.SaveSettings(input); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = service.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.NotifyOnFinish || !settings.CheckUpdates {
+		t.Fatalf("settings = %+v", settings)
+	}
+	input.NotifyOnFinish = true
+	if err := service.SaveSettings(input); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = service.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.NotifyOnFinish {
+		t.Fatal("settings did not re-enable finish notifications")
+	}
+}
+
 func TestSwarmAvailability(t *testing.T) {
 	tests := []struct {
 		name   string

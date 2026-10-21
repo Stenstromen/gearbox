@@ -1209,6 +1209,68 @@ body.is-resizing {
 
 .preferences-check input { accent-color: var(--accent); }
 
+.preferences-permission {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #15171b;
+}
+
+.preferences-permission-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.preferences-permission-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.preferences-permission-title { font-weight: 650; }
+
+.preferences-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.preferences-permission .preferences-actions {
+    flex-wrap: wrap;
+    margin-top: 0;
+}
+
+.preferences-badge {
+    flex: none;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.preferences-badge.is-ok {
+    color: var(--down);
+    background: rgb(125 206 160 / 16%);
+}
+
+.preferences-badge.is-warn {
+    color: var(--accent);
+    background: rgb(224 161 90 / 16%);
+}
+
+.preferences-flash {
+    margin: 0;
+    color: var(--down);
+    font-size: 12px;
+}
+
+.preferences-flash.is-warn { color: var(--danger); }
+
 .preferences-actions {
     display: flex;
     gap: 8px;

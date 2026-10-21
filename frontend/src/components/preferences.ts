@@ -1,4 +1,4 @@
-import {TransmissionService} from "../../bindings/github.com/stenstromen/gearbox";
+import {TransmissionService, type NotificationPermission} from "../../bindings/github.com/stenstromen/gearbox";
 
 export type PreferencesPanel = {
     element: HTMLElement;
@@ -52,6 +52,98 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
     updateText.textContent = "Check for new versions";
     updateLabel.append(updateInput, updateText);
 
+    const notifyLabel = document.createElement("label");
+    notifyLabel.className = "preferences-check";
+    const notifyInput = document.createElement("input");
+    notifyInput.type = "checkbox";
+    notifyInput.checked = true;
+    const notifyText = document.createElement("span");
+    notifyText.textContent = "Send a notification when a download finishes";
+    notifyLabel.append(notifyInput, notifyText);
+
+    const permission = document.createElement("div");
+    permission.className = "preferences-permission";
+    const permissionRow = document.createElement("div");
+    permissionRow.className = "preferences-permission-row";
+    const permissionCopy = document.createElement("div");
+    permissionCopy.className = "preferences-permission-copy";
+    const permissionTitle = document.createElement("div");
+    permissionTitle.className = "preferences-permission-title";
+    permissionTitle.textContent = "System permission";
+    const permissionDesc = document.createElement("p");
+    permissionDesc.className = "preferences-note";
+    permissionDesc.textContent = "macOS must allow Gearbox to show notifications when a download finishes.";
+    permissionCopy.append(permissionTitle, permissionDesc);
+    const permissionBadge = document.createElement("span");
+    permissionBadge.className = "preferences-badge is-warn";
+    permissionBadge.textContent = "Checking…";
+    permissionRow.append(permissionCopy, permissionBadge);
+
+    const permissionMessage = document.createElement("p");
+    permissionMessage.className = "preferences-note";
+    permissionMessage.hidden = true;
+
+    const permissionActions = document.createElement("div");
+    permissionActions.className = "preferences-actions";
+    const enableButton = document.createElement("button");
+    enableButton.type = "button";
+    enableButton.className = "modal-button modal-primary";
+    enableButton.textContent = "Enable Notifications…";
+    enableButton.disabled = true;
+    const testButton = document.createElement("button");
+    testButton.type = "button";
+    testButton.className = "modal-button";
+    testButton.textContent = "Send Test Notification";
+    testButton.disabled = true;
+    const refreshPermButton = document.createElement("button");
+    refreshPermButton.type = "button";
+    refreshPermButton.className = "modal-button";
+    refreshPermButton.textContent = "Refresh Status";
+    permissionActions.append(enableButton, testButton, refreshPermButton);
+
+    const permissionFlash = document.createElement("p");
+    permissionFlash.className = "preferences-flash";
+    permissionFlash.hidden = true;
+
+    const permissionHint = document.createElement("p");
+    permissionHint.className = "preferences-note";
+    permissionHint.textContent = "If the system dialog doesn’t appear, open System Settings → Notifications → Gearbox and turn alerts on.";
+    permission.append(permissionRow, permissionMessage, permissionActions, permissionFlash, permissionHint);
+
+    let permissionState: NotificationPermission | null = null;
+    let permissionBusy = false;
+
+    const showPermissionFlash = (message: string, warn = false) => {
+        permissionFlash.hidden = false;
+        permissionFlash.textContent = message;
+        permissionFlash.classList.toggle("is-warn", warn);
+    };
+
+    const renderPermission = () => {
+        const authorized = permissionState?.authorized === true;
+        permissionBadge.textContent = permissionState == null ? "Checking…" : authorized ? "Allowed" : "Not allowed";
+        permissionBadge.className = `preferences-badge${authorized ? " is-ok" : " is-warn"}`;
+        permissionMessage.hidden = !permissionState?.message;
+        permissionMessage.textContent = permissionState?.message ?? "";
+        enableButton.hidden = authorized;
+        enableButton.disabled = permissionBusy || permissionState?.available !== true;
+        testButton.disabled = permissionBusy || !authorized;
+        refreshPermButton.disabled = permissionBusy;
+    };
+
+    const loadPermission = () => {
+        permissionBusy = true;
+        renderPermission();
+        void TransmissionService.GetNotificationPermission().then((next) => {
+            permissionState = next;
+        }).catch((err: unknown) => {
+            permissionState = {authorized: false, available: false, message: messageOf(err)};
+        }).finally(() => {
+            permissionBusy = false;
+            renderPermission();
+        });
+    };
+
     const error = document.createElement("p");
     error.className = "modal-error";
     error.hidden = true;
@@ -76,6 +168,8 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
         clearLabel,
         refreshInput.label,
         updateLabel,
+        notifyLabel,
+        permission,
         error,
         actions,
     );
@@ -99,8 +193,11 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
         error.hidden = true;
         passwordInput.input.value = "";
         clearInput.checked = false;
+        notifyInput.checked = true;
+        permissionFlash.hidden = true;
         saveButton.disabled = false;
         saveButton.textContent = "Save";
+        loadPermission();
         void TransmissionService.GetSettings().then((settings) => {
             if (page.hidden) {
                 return;
@@ -109,6 +206,7 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
             usernameInput.input.value = settings?.username ?? "";
             refreshInput.input.value = String(settings?.refreshSeconds || 5);
             updateInput.checked = settings?.checkUpdates !== false;
+            notifyInput.checked = settings?.notifyOnFinish !== false;
             clearLabel.hidden = !settings?.hasPassword;
         }).catch((err: unknown) => {
             if (!page.hidden) {
@@ -117,6 +215,50 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
         });
         urlInput.input.focus();
     };
+
+    enableButton.addEventListener("click", () => {
+        permissionBusy = true;
+        permissionFlash.hidden = true;
+        renderPermission();
+        void TransmissionService.RequestNotificationPermission().then((next) => {
+            permissionState = next;
+            if (next.authorized) {
+                showPermissionFlash("Permission granted.");
+            }
+        }).catch((err: unknown) => {
+            showPermissionFlash(messageOf(err), true);
+            return TransmissionService.GetNotificationPermission().then((next) => {
+                permissionState = next;
+            }).catch((loadErr: unknown) => {
+                permissionState = {authorized: false, available: false, message: messageOf(loadErr)};
+            });
+        }).finally(() => {
+            permissionBusy = false;
+            renderPermission();
+        });
+    });
+    testButton.addEventListener("click", () => {
+        permissionBusy = true;
+        permissionFlash.hidden = true;
+        renderPermission();
+        void TransmissionService.SendTestNotification().then(() => {
+            showPermissionFlash("Test notification sent.");
+        }).catch((err: unknown) => {
+            showPermissionFlash(messageOf(err), true);
+            return TransmissionService.GetNotificationPermission().then((next) => {
+                permissionState = next;
+            }).catch((loadErr: unknown) => {
+                permissionState = {authorized: false, available: false, message: messageOf(loadErr)};
+            });
+        }).finally(() => {
+            permissionBusy = false;
+            renderPermission();
+        });
+    });
+    refreshPermButton.addEventListener("click", () => {
+        permissionFlash.hidden = true;
+        loadPermission();
+    });
 
     closeButton.addEventListener("click", close);
     form.addEventListener("submit", (event) => {
@@ -141,6 +283,7 @@ export function createPreferencesPanel(onClose: () => void, onSaved: (refreshSec
             clearPassword: clearInput.checked,
             refreshSeconds,
             checkUpdates: updateInput.checked,
+            notifyOnFinish: notifyInput.checked,
         }).then(() => {
             passwordInput.input.value = "";
             page.hidden = true;

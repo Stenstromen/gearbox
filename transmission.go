@@ -55,6 +55,7 @@ type Settings struct {
 	RefreshSeconds int    `json:"refreshSeconds"`
 	Sort           string `json:"sort"`
 	CheckUpdates   bool   `json:"checkUpdates"`
+	NotifyOnFinish bool   `json:"notifyOnFinish"`
 }
 
 // SettingsInput is a preferences save. An empty password keeps the saved one.
@@ -65,6 +66,7 @@ type SettingsInput struct {
 	ClearPassword  bool   `json:"clearPassword"`
 	RefreshSeconds int    `json:"refreshSeconds"`
 	CheckUpdates   bool   `json:"checkUpdates"`
+	NotifyOnFinish bool   `json:"notifyOnFinish"`
 }
 
 // TransmissionService lists torrents on a remote Transmission daemon.
@@ -79,6 +81,10 @@ type TransmissionService struct {
 	badge        dockBadge
 	badgeErr     string
 	badgeApplied *int
+
+	notifyMu     sync.Mutex
+	notifier     statusNotifier
+	downloadSeen map[int]bool
 }
 
 // NewTransmissionService loads saved preferences, falling back to the environment
@@ -121,6 +127,7 @@ func (s *TransmissionService) GetSettings() (Settings, error) {
 		RefreshSeconds: prefs.RefreshSeconds,
 		Sort:           prefs.Sort,
 		CheckUpdates:   prefs.CheckUpdates,
+		NotifyOnFinish: prefs.NotifyOnFinish,
 	}
 	if settings.URL == "" {
 		settings.URL = strings.TrimSpace(os.Getenv(envURL))
@@ -148,6 +155,7 @@ func (s *TransmissionService) SaveSettings(input SettingsInput) error {
 		RefreshSeconds: input.RefreshSeconds,
 		Sort:           existing.Sort,
 		CheckUpdates:   input.CheckUpdates,
+		NotifyOnFinish: input.NotifyOnFinish,
 	}.Normalize()
 	if _, err := normalizeEndpoint(prefs.URL); err != nil {
 		return err
@@ -254,7 +262,7 @@ func (s *TransmissionService) ListTorrents(ctx context.Context) ([]Torrent, erro
 		s.syncDownloadBadge(0)
 		return nil, err
 	}
-	s.syncDownloadBadge(activeDownloads(torrents))
+	s.observeTorrents(torrents)
 	return torrents, nil
 }
 
