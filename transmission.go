@@ -456,6 +456,26 @@ func (s *TransmissionService) SetTorrentFiles(ctx context.Context, id int, updat
 	return client.SetTorrentFiles(ctx, id, update)
 }
 
+// SpeedLimitEnabled reports whether Transmission's speed limit is on.
+// The daemon stores that as the session field alt-speed-enabled.
+func (s *TransmissionService) SpeedLimitEnabled(ctx context.Context) (bool, error) {
+	client, err := s.rpc()
+	if err != nil {
+		return false, err
+	}
+	return client.SpeedLimitEnabled(ctx)
+}
+
+// SetSpeedLimitEnabled turns Transmission's speed limit on or off
+// by setting the session field alt-speed-enabled.
+func (s *TransmissionService) SetSpeedLimitEnabled(ctx context.Context, enabled bool) error {
+	client, err := s.rpc()
+	if err != nil {
+		return err
+	}
+	return client.SetSpeedLimitEnabled(ctx, enabled)
+}
+
 // Client talks to Transmission's classic JSON-RPC endpoint.
 // That dialect is understood by Transmission 2.x through 4.x.
 type Client struct {
@@ -827,6 +847,22 @@ func swarmAvailability(pieces []float64) float64 {
 		}
 	}
 	return present / float64(len(pieces))
+}
+
+func (c *Client) SpeedLimitEnabled(ctx context.Context) (bool, error) {
+	var session struct {
+		Enabled bool `json:"alt-speed-enabled"`
+	}
+	if err := c.call(ctx, "session-get", map[string]any{
+		"fields": []string{"alt-speed-enabled"},
+	}, &session); err != nil {
+		return false, err
+	}
+	return session.Enabled, nil
+}
+
+func (c *Client) SetSpeedLimitEnabled(ctx context.Context, enabled bool) error {
+	return c.call(ctx, "session-set", map[string]any{"alt-speed-enabled": enabled}, nil)
 }
 
 func (c *Client) DownloadLocation(ctx context.Context, path string) (DownloadLocation, error) {

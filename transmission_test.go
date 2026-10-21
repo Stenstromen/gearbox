@@ -652,3 +652,43 @@ func TestVerifyReannounceSetLocation(t *testing.T) {
 		t.Fatalf("find = %s", calls[3])
 	}
 }
+
+func TestSpeedLimit(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		text := string(body)
+		calls = append(calls, text)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(text, `"session-get"`) {
+			_, _ = io.WriteString(w, `{"arguments":{"alt-speed-enabled":true},"result":"success"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"arguments":{},"result":"success"}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled, err := client.SpeedLimitEnabled(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("expected the speed limit to be on")
+	}
+	if err := client.SetSpeedLimitEnabled(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(calls))
+	}
+	if !strings.Contains(calls[0], `"session-get"`) || !strings.Contains(calls[0], `"alt-speed-enabled"`) {
+		t.Fatalf("get = %s", calls[0])
+	}
+	if !strings.Contains(calls[1], `"session-set"`) || !strings.Contains(calls[1], `"alt-speed-enabled":false`) {
+		t.Fatalf("set = %s", calls[1])
+	}
+}

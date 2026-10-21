@@ -124,6 +124,48 @@ html, body {
 .total-down { color: var(--down); }
 .total-up { color: var(--accent); }
 
+.speed-limit {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-right: -2px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.speed-limit svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+.speed-limit:hover:not(:disabled) {
+    color: var(--text);
+    background: #2a2e36;
+}
+
+.speed-limit[aria-pressed="true"] {
+    color: var(--accent);
+    background: rgba(224, 161, 90, 0.18);
+}
+
+.speed-limit[aria-pressed="true"]:hover:not(:disabled) {
+    color: var(--accent);
+    background: rgba(224, 161, 90, 0.28);
+}
+
+.speed-limit:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
 .field {
     display: flex;
     flex: none;

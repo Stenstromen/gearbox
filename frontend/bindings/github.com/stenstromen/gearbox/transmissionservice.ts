@@ -95,6 +95,14 @@ export function SetSort(sort: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetSpeedLimitEnabled turns Transmission's speed limit on or off
+ * by setting the session field alt-speed-enabled.
+ */
+export function SetSpeedLimitEnabled(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(21857550, enabled);
+}
+
+/**
  * SetTorrentFiles downloads, skips, or reprioritizes files in one torrent.
  */
 export function SetTorrentFiles(id: number, update: $models.TorrentFilesUpdate): $CancellablePromise<void> {
@@ -107,6 +115,14 @@ export function SetTorrentFiles(id: number, update: $models.TorrentFilesUpdate):
  */
 export function SetTorrentLocation(id: number, location: string, move: boolean): $CancellablePromise<void> {
     return $Call.ByID(3744732816, id, location, move);
+}
+
+/**
+ * SpeedLimitEnabled reports whether Transmission's speed limit is on.
+ * The daemon stores that as the session field alt-speed-enabled.
+ */
+export function SpeedLimitEnabled(): $CancellablePromise<boolean> {
+    return $Call.ByID(2992685312);
 }
 
 /**

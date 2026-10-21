@@ -50,11 +50,16 @@ export function mountApp(root: HTMLElement): void {
     });
     const totals = document.createElement("div");
     totals.className = "totals";
+    const speedLimitButton = document.createElement("button");
+    speedLimitButton.type = "button";
+    speedLimitButton.className = "speed-limit";
+    speedLimitButton.append(turtleIcon());
+    speedLimitButton.setAttribute("aria-label", "Speed limit");
     const downTotal = document.createElement("span");
     downTotal.className = "total total-down";
     const upTotal = document.createElement("span");
     upTotal.className = "total total-up";
-    totals.append(downTotal, upTotal);
+    totals.append(speedLimitButton, downTotal, upTotal);
     const preferencesButton = actionButton("Preferences", gearIcon());
     const toolbarEnd = document.createElement("div");
     toolbarEnd.className = "toolbar-end";
@@ -213,6 +218,10 @@ export function mountApp(root: HTMLElement): void {
     let inspectorLoading = false;
     let inspectorGeneration = 0;
     let fileUpdateGeneration = 0;
+    let speedLimitOn = false;
+    let speedLimitKnown = false;
+    let speedLimitBusy = false;
+    let speedLimitWrite = 0;
 
     const visibleTorrents = () => sortTorrents(filterByStatus(filterByName(torrents, nameQuery), statusFilter), sortKey, sortReversed);
 
@@ -228,6 +237,7 @@ export function mountApp(root: HTMLElement): void {
             onContextMenu: openRowMenu,
         });
         showTotals(torrents);
+        paintSpeedLimit();
         const chosen = selectedTorrents();
         const ready = chosen.length > 0 && !acting;
         deleteButton.disabled = !ready;
@@ -530,7 +540,18 @@ export function mountApp(root: HTMLElement): void {
         downTotal.textContent = `Down ${formatRate(down)}`;
         upTotal.textContent = `Up ${formatRate(up)}`;
     };
+
+    const paintSpeedLimit = () => {
+        speedLimitButton.disabled = !speedLimitKnown || speedLimitBusy;
+        speedLimitButton.setAttribute("aria-pressed", String(speedLimitOn));
+        if (!speedLimitKnown) {
+            speedLimitButton.title = "Speed limit";
+            return;
+        }
+        speedLimitButton.title = speedLimitOn ? "Speed limit on" : "Speed limit off";
+    };
     showTotals([]);
+    paintSpeedLimit();
 
     nameInput.addEventListener("input", () => {
         nameQuery = nameInput.value;
@@ -615,6 +636,26 @@ export function mountApp(root: HTMLElement): void {
         }, refreshMs);
     };
 
+    const syncSpeedLimit = async () => {
+        const write = speedLimitWrite;
+        try {
+            const enabled = await TransmissionService.SpeedLimitEnabled();
+            if (write !== speedLimitWrite || speedLimitBusy) {
+                return;
+            }
+            speedLimitOn = enabled;
+            speedLimitKnown = true;
+            paintSpeedLimit();
+        } catch (err) {
+            if (write !== speedLimitWrite) {
+                return;
+            }
+            if (isUnavailable(err)) {
+                failConnection();
+            }
+        }
+    };
+
     const load = async () => {
         if (inFlight) {
             reloadQueued = true;
@@ -672,6 +713,7 @@ export function mountApp(root: HTMLElement): void {
                 torrentInfo = torrentInfos.find((info) => info.id === cursorId) ?? (torrentInfo?.id === cursorId ? torrentInfo : null);
             }
             paint();
+            void syncSpeedLimit();
             if (inspectorOpen && cursorId !== null) {
                 void loadInspector();
             }
@@ -723,6 +765,46 @@ export function mountApp(root: HTMLElement): void {
             paint();
         }
     };
+
+    speedLimitButton.addEventListener("click", () => {
+        if (!speedLimitKnown || speedLimitBusy) {
+            return;
+        }
+        const next = !speedLimitOn;
+        const write = ++speedLimitWrite;
+        speedLimitBusy = true;
+        speedLimitOn = next;
+        paintSpeedLimit();
+        const settle = (err?: unknown) => {
+            if (write !== speedLimitWrite) {
+                return;
+            }
+            speedLimitBusy = false;
+            speedLimitWrite++;
+            if (err === undefined) {
+                speedLimitOn = next;
+                notice.hidden = true;
+                notice.textContent = "";
+                paintSpeedLimit();
+                return;
+            }
+            speedLimitOn = !next;
+            paintSpeedLimit();
+            if (isUnavailable(err)) {
+                notice.hidden = true;
+                notice.textContent = "";
+                failConnection();
+                return;
+            }
+            notice.hidden = false;
+            notice.textContent = errorMessage(err);
+        };
+        void TransmissionService.SetSpeedLimitEnabled(next).then(() => {
+            settle();
+        }).catch((err: unknown) => {
+            settle(err);
+        });
+    });
 
     openButton.addEventListener("click", () => {
         openAddDialog(() => {
@@ -1085,6 +1167,44 @@ function playIcon(): SVGSVGElement {
 
 function pauseIcon(): SVGSVGElement {
     return actionIcon(["M8 5.2h3.1v13.6H8z", "M12.9 5.2H16v13.6h-3.1z"]);
+}
+
+function turtleIcon(): SVGSVGElement {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+
+    const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+    mask.id = "speed-limit-turtle";
+    const plate = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    plate.setAttribute("width", "24");
+    plate.setAttribute("height", "24");
+    plate.setAttribute("fill", "white");
+    const eye = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    eye.setAttribute("cx", "19.55");
+    eye.setAttribute("cy", "11.15");
+    eye.setAttribute("r", "0.72");
+    eye.setAttribute("fill", "black");
+    mask.append(plate, eye);
+
+    const body = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    body.setAttribute("fill", "currentColor");
+    body.setAttribute("mask", "url(#speed-limit-turtle)");
+    for (const shape of [
+        ["ellipse", {cx: "3.7", cy: "14.4", rx: "1.7", ry: "0.75", transform: "rotate(-18 3.7 14.4)"}],
+        ["ellipse", {cx: "7.3", cy: "17.15", rx: "1.45", ry: "2.15", transform: "rotate(14 7.3 17.15)"}],
+        ["ellipse", {cx: "13.4", cy: "17.05", rx: "1.45", ry: "2.2", transform: "rotate(-10 13.4 17.05)"}],
+        ["ellipse", {cx: "11", cy: "12.5", rx: "5.7", ry: "4.55"}],
+        ["ellipse", {cx: "17.7", cy: "11.55", rx: "3.15", ry: "2.2"}],
+    ] as const) {
+        const node = document.createElementNS("http://www.w3.org/2000/svg", shape[0]);
+        for (const [key, value] of Object.entries(shape[1])) {
+            node.setAttribute(key, value);
+        }
+        body.append(node);
+    }
+    svg.append(mask, body);
+    return svg;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
