@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -86,11 +87,13 @@ func (s *TransmissionService) refreshInterval() time.Duration {
 }
 
 // activeDownloads counts torrents Transmission is downloading now.
-// Queued, stopped, verifying, and seeding torrents are not included.
+// Queued, stopped, verifying, seeding, and errored torrents are not included.
+// Transmission keeps status "Downloading" when a torrent has an error, and the
+// list shows that error in place of the status.
 func activeDownloads(torrents []Torrent) int {
 	count := 0
 	for _, torrent := range torrents {
-		if torrent.Status == "Downloading" {
+		if torrent.Status == "Downloading" && strings.TrimSpace(torrent.Error) == "" {
 			count++
 		}
 	}

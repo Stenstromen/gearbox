@@ -19,9 +19,11 @@ func TestActiveDownloads(t *testing.T) {
 		{Status: "Stopped"},
 		{Status: "Verifying"},
 		{Status: "Seeding complete"},
+		{Status: "Downloading", Error: "No data found"},
+		{Status: "Downloading", Error: "  "},
 	}
-	if got := activeDownloads(torrents); got != 2 {
-		t.Fatalf("activeDownloads = %d, want 2", got)
+	if got := activeDownloads(torrents); got != 3 {
+		t.Fatalf("activeDownloads = %d, want 3", got)
 	}
 }
 
@@ -34,7 +36,8 @@ func TestListTorrentsSetsDockBadge(t *testing.T) {
 					{"id":1,"name":"Alpha","status":4,"isFinished":false},
 					{"id":2,"name":"Queued","status":3,"isFinished":false},
 					{"id":3,"name":"Beta","status":4,"isFinished":false},
-					{"id":4,"name":"Seed","status":6,"isFinished":false}
+					{"id":4,"name":"Seed","status":6,"isFinished":false},
+					{"id":5,"name":"Broken","status":4,"isFinished":false,"errorString":"No data found"}
 				]
 			},
 			"result": "success"
