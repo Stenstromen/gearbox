@@ -217,6 +217,7 @@ export function mountApp(root: HTMLElement): void {
     let inspectorError = "";
     let inspectorLoading = false;
     let inspectorGeneration = 0;
+    let inspectorViewKey = "";
     let fileUpdateGeneration = 0;
     let speedLimitOn = false;
     let speedLimitKnown = false;
@@ -257,6 +258,15 @@ export function mountApp(root: HTMLElement): void {
         return torrentInfo ? [torrentInfo] : [];
     };
 
+    const restoreInspectorScroll = (body: HTMLElement, top: number, left: number) => {
+        body.scrollTop = top;
+        body.scrollLeft = left;
+        // A freshly built list can drop its offset until layout knows the content height.
+        void body.offsetHeight;
+        body.scrollTop = top;
+        body.scrollLeft = left;
+    };
+
     const paintInspector = (updateValues: boolean) => {
         if (preferencesOpen) {
             inspector.hidden = true;
@@ -265,14 +275,20 @@ export function mountApp(root: HTMLElement): void {
         inspector.hidden = !inspectorOpen || cursorId === null;
         if (!inspectorOpen || cursorId === null) {
             inspectorContent.replaceChildren();
+            inspectorViewKey = "";
             return;
         }
         const selection = inspectorSelection();
+        const viewKey = `${inspectorTab}:${cursorId}`;
+        const sameView = viewKey === inspectorViewKey;
+        inspectorViewKey = viewKey;
         if (updateValues && selection.length > 0 && inspectorContent.querySelector(".inspector-columns")) {
             fillTorrentInfo(inspectorContent, selection);
             return;
         }
-        const scroll = updateValues ? inspectorContent.querySelector(".inspector-body")?.scrollTop ?? 0 : 0;
+        const previous = sameView ? inspectorContent.querySelector(".inspector-body") : null;
+        const scrollTop = previous instanceof HTMLElement ? previous.scrollTop : 0;
+        const scrollLeft = previous instanceof HTMLElement ? previous.scrollLeft : 0;
         renderInspector(inspectorContent, {
             tab: inspectorTab,
             loading: inspectorLoading,
@@ -285,10 +301,10 @@ export function mountApp(root: HTMLElement): void {
         }, closeInspector, (update) => {
             void updateTorrentFiles(update);
         });
-        if (scroll > 0) {
+        if (scrollTop > 0 || scrollLeft > 0) {
             const body = inspectorContent.querySelector(".inspector-body");
-            if (body) {
-                body.scrollTop = scroll;
+            if (body instanceof HTMLElement) {
+                restoreInspectorScroll(body, scrollTop, scrollLeft);
             }
         }
     };
